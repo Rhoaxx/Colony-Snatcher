@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Colony Picker — PIXL Rearray</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700&display=swap');
+:root{
+  --bg:#07090e;--surf:#0c1219;--panel:#101820;--bdr:#182534;--bdr2:#1e3045;
+  --acc:#00e5c0;--accd:rgba(0,229,192,.1);--ora:#ff7043;--blu:#448aff;
+  --warn:#ffca28;--bad:#ef5350;--good:#66bb6a;
+  --tx:#b8cfe0;--txm:#6a90aa;--txd:#2d4a60;
+  --mono:'JetBrains Mono',monospace;--sans:'Syne',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:var(--sans);background:var(--bg);color:var(--tx)}
+
+/* HEADER */
+.hdr{display:flex;align-items:center;gap:10px;padding:0 16px;height:40px;
+  background:var(--panel);border-bottom:1px solid var(--bdr);flex-shrink:0}
+.logo{font-family:var(--mono);font-size:13px;color:var(--acc);font-weight:700;letter-spacing:1px}
+.logo em{color:var(--txm);font-style:normal;font-weight:400}
+.pills{display:flex;gap:3px;margin-left:auto}
+.pill{font-family:var(--mono);font-size:9px;padding:3px 9px;border-radius:10px;
+  border:1px solid var(--bdr2);color:var(--txd);transition:all .2s}
+.pill.on{border-color:var(--acc);color:var(--acc);background:var(--accd)}
+.pill.done{border-color:var(--good);color:var(--good)}
+
+/* LAYOUT */
+.app{display:flex;flex-direction:column;height:calc(100vh - 40px)}
+
+/* VIEWER — top, flexible */
+.viewer{flex:1;min-height:0;background:#030507;position:relative;
+  display:flex;align-items:center;justify-content:center;overflow:hidden}
+#cv{display:none;image-rendering:pixelated}
+
+.empty{display:flex;flex-direction:column;align-items:center;gap:10px;
+  opacity:.4;pointer-events:none;user-select:none}
+.empty .ico{font-size:54px}
+.empty p{font-family:var(--mono);font-size:11px;color:var(--txm);text-align:center;line-height:1.8}
+
+.modebar{position:absolute;top:9px;left:50%;transform:translateX(-50%);display:none;
+  gap:2px;background:rgba(10,15,22,.92);border:1px solid var(--bdr2);
+  border-radius:18px;padding:3px;backdrop-filter:blur(6px)}
+.mb{font-family:var(--mono);font-size:10px;padding:4px 13px;border-radius:13px;
+  border:none;background:transparent;color:var(--txm);cursor:pointer;transition:all .15s}
+.mb.on{background:var(--acc);color:#000;font-weight:700}
+.mb:not(.on):hover{color:var(--tx)}
+
+.zooms{position:absolute;bottom:9px;right:9px;display:none;gap:3px}
+.zb{width:27px;height:27px;background:rgba(10,15,22,.85);border:1px solid var(--bdr2);
+  color:var(--txm);border-radius:3px;cursor:pointer;font-size:14px;
+  display:flex;align-items:center;justify-content:center;transition:all .15s}
+.zb:hover{border-color:var(--acc);color:var(--acc)}
+
+.overlay{position:absolute;inset:0;background:rgba(7,9,14,.9);display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:50}
+.spin{width:34px;height:34px;border:3px solid rgba(0,229,192,.2);
+  border-top-color:var(--acc);border-radius:50%;animation:sp .65s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.lm{font-family:var(--mono);font-size:12px;color:var(--acc)}
+.ls{font-family:var(--mono);font-size:10px;color:var(--txm)}
+
+#tip{position:fixed;background:var(--panel);border:1px solid var(--bdr2);
+  border-radius:5px;padding:8px 10px;font-family:var(--mono);font-size:10px;
+  pointer-events:none;z-index:300;display:none;line-height:1.7;
+  box-shadow:0 8px 24px rgba(0,0,0,.6)}
+#tip .tn{color:var(--acc);font-size:11px;font-weight:700;margin-bottom:2px}
+
+/* BOTTOM PANEL */
+.btm{height:285px;flex-shrink:0;display:flex;border-top:1px solid var(--bdr);background:var(--surf)}
+
+/* Columns */
+.col{border-right:1px solid var(--bdr);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+.col:last-child{border-right:none;flex:1;min-width:150px}
+.ch{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--txd);
+  text-transform:uppercase;padding:7px 12px 5px;border-bottom:1px solid var(--bdr);
+  display:flex;align-items:center;gap:6px;flex-shrink:0}
+.ch .bg{background:var(--bdr2);color:var(--txm);font-size:8px;padding:1px 5px;border-radius:8px}
+.ch .bg.a{background:var(--accd);color:var(--acc)}
+.cb{flex:1;overflow-y:auto;padding:8px 12px}
+
+.col-setup{width:248px}
+.col-detect{width:238px}
+.col-filter{width:228px}
+.col-stats{width:180px}
+
+/* Form elements */
+.lbl{display:block;font-family:var(--mono);font-size:9px;color:var(--txm);margin-bottom:2px;margin-top:7px}
+.lbl:first-child{margin-top:0}
+input[type=text],input[type=number],select{
+  width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--tx);
+  padding:5px 8px;font-family:var(--mono);font-size:11px;border-radius:3px;outline:none;transition:border-color .15s}
+input:focus,select:focus{border-color:var(--acc)}
+select option{background:var(--panel)}
+
+.drop{border:1.5px dashed var(--bdr2);border-radius:4px;padding:10px;
+  text-align:center;cursor:pointer;transition:all .2s;position:relative;background:var(--bg);margin-bottom:5px}
+.drop:hover,.drop.over{border-color:var(--acc);background:var(--accd)}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-i{font-size:18px;margin-bottom:1px}
+.drop-t{font-family:var(--mono);font-size:9px;color:var(--txm);line-height:1.3}
+.drop-n{font-size:8px;color:var(--acc);margin-top:1px;font-family:var(--mono);word-break:break-all}
+
+.etags{display:flex;flex-wrap:wrap;gap:2px;margin-top:4px}
+.et{font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:2px;
+  background:rgba(239,83,80,.08);border:1px solid rgba(239,83,80,.2);color:var(--bad);cursor:pointer}
+.et:hover{background:rgba(239,83,80,.18)}
+
+.btn{display:flex;align-items:center;justify-content:center;gap:5px;
+  width:100%;padding:7px;border-radius:3px;border:none;cursor:pointer;
+  font-family:var(--sans);font-size:12px;font-weight:600;transition:all .15s;margin-top:5px}
+.bp{background:var(--acc);color:#000}.bp:hover{background:#00ffd4}
+.bp:disabled{background:#082820;color:var(--txd);cursor:not-allowed}
+.bs{background:transparent;border:1px solid var(--bdr2);color:var(--txm)}
+.bs:hover{border-color:var(--blu);color:var(--blu)}
+.bs:disabled{opacity:.35;cursor:not-allowed}
+.be{background:var(--ora);color:#fff}.be:hover{background:#ff8a65}
+.be:disabled{background:#280d06;color:var(--txd);cursor:not-allowed}
+
+.sr{display:flex;align-items:center;gap:6px;margin-top:4px}
+.sr input[type=range]{flex:1;-webkit-appearance:none;height:2px;border-radius:1px;
+  background:var(--bdr2);outline:none;cursor:pointer}
+.sr input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;
+  border-radius:50%;background:var(--acc);cursor:pointer;transition:transform .1s}
+.sr input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.3)}
+.sv{font-family:var(--mono);font-size:10px;color:var(--acc);min-width:32px;text-align:right;flex-shrink:0}
+
+/* Stats */
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.sb{background:var(--bg);border:1px solid var(--bdr);border-radius:3px;padding:6px;text-align:center}
+.sv2{font-family:var(--mono);font-size:19px;font-weight:700;color:var(--acc)}
+.sv2.w{color:var(--warn)}.sv2.g{color:var(--good)}
+.sl2{font-family:var(--mono);font-size:8px;color:var(--txd);margin-top:1px}
+.prog{background:var(--bg);border-radius:2px;height:3px;overflow:hidden;margin-top:6px}
+.pf{height:100%;background:linear-gradient(90deg,var(--acc),var(--blu));border-radius:2px;transition:width .4s}
+.note{padding:6px 8px;border-radius:3px;font-family:var(--mono);font-size:9px;margin-top:5px;line-height:1.4}
+.nok{background:rgba(102,187,106,.07);border:1px solid rgba(102,187,106,.18);color:var(--good)}
+.nw{background:rgba(255,202,40,.07);border:1px solid rgba(255,202,40,.18);color:var(--warn)}
+.ni{background:rgba(68,138,255,.07);border:1px solid rgba(68,138,255,.18);color:var(--blu)}
+
+/* Colony list */
+.ci{display:flex;align-items:center;gap:5px;padding:4px 5px;border-radius:3px;margin-bottom:1px;
+  cursor:pointer;border:1px solid transparent;font-family:var(--mono);font-size:9px;transition:background .1s}
+.ci:hover{background:rgba(255,255,255,.03)}
+.ci.a{background:rgba(68,138,255,.06);border-color:rgba(68,138,255,.15)}
+.ci.m{background:rgba(255,112,67,.06);border-color:rgba(255,112,67,.15)}
+.cd{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.cw{color:var(--tx);flex:1;font-weight:500}
+.csc{color:var(--txm);font-size:8px}
+.ct{font-size:8px;padding:1px 4px;border-radius:2px;flex-shrink:0}
+.ct.a{background:rgba(68,138,255,.14);color:var(--blu)}
+.ct.m{background:rgba(255,112,67,.14);color:var(--ora)}
+.crm{width:13px;height:13px;border-radius:50%;border:1px solid var(--bdr2);
+  background:transparent;color:var(--txm);font-size:9px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.crm:hover{border-color:var(--bad);color:var(--bad)}
+
+.hint{font-family:var(--mono);font-size:9px;color:var(--txm);line-height:1.4;margin-bottom:5px}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--bdr2)}::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">◉ COLONY<em>/</em>PICKER</div>
+  <div style="font-family:var(--mono);font-size:9px;color:var(--txd)">PIXL Rearray · Singer Instruments</div>
+  <div class="pills">
+    <div class="pill on" id="p1">1 · Upload</div>
+    <div class="pill"    id="p2">2 · Detect</div>
+    <div class="pill"    id="p3">3 · Filter</div>
+    <div class="pill"    id="p4">4 · Export</div>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- VIEWER -->
+  <div class="viewer" id="viewer">
+    <div class="empty" id="emptyState">
+      <div class="ico">🧫</div>
+      <p>Upload a plate image to begin.<br>Colonies are detected inside the agar plate only.<br>Filter sliders refine the auto-selection.</p>
+    </div>
+    <canvas id="cv"></canvas>
+
+    <div class="modebar" id="modebar">
+      <button class="mb on" id="mV" onclick="setMode('view')">VIEW</button>
+      <button class="mb"    id="mA" onclick="setMode('add')">+ ADD</button>
+      <button class="mb"    id="mR" onclick="setMode('rm')">− REMOVE</button>
+      <button class="mb on" id="mOv" onclick="toggleOverlay()" title="Toggle colony circles">◉ OVERLAY</button>
+    </div>
+
+    <div class="zooms" id="zooms">
+      <button class="zb" onclick="zBy(1.35)">+</button>
+      <button class="zb" onclick="zBy(0.74)">−</button>
+      <button class="zb" onclick="zReset()" title="Fit">⊙</button>
+    </div>
+
+    <div class="overlay" id="ov">
+      <div class="spin"></div>
+      <div class="lm" id="lm">Working…</div>
+      <div class="ls" id="ls"></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM -->
+  <div class="btm">
+
+    <!-- Setup -->
+    <div class="col col-setup">
+      <div class="ch">Setup</div>
+      <div class="cb">
+        <div class="drop" id="dz">
+          <input type="file" id="fi" accept="image/*">
+          <div class="drop-i">🔬</div>
+          <div class="drop-t">Drop plate image or click to browse</div>
+          <div class="drop-n" id="fn"></div>
+        </div>
+        <div class="lbl">Source Plate Name</div>
+        <input type="text" id="srcN" value="SourcePlate1">
+        <div class="lbl">Target Plate Name</div>
+        <input type="text" id="tgtN" value="TargetPlate1">
+        <div class="lbl">Target Format</div>
+        <select id="tgtF">
+          <option value="DWP_96">96-well DWP</option>
+          <option value="SBS_96">96-well SBS</option>
+          <option value="DWP_384">384-well DWP</option>
+        </select>
+        <div class="lbl">Colonies Needed</div>
+        <input type="number" id="tgtC" value="88" min="1" max="384">
+        <div class="lbl">Exclude Wells (A1, H11-H12)</div>
+        <input type="text" id="excI" placeholder="e.g. A1, B3-B6, H12">
+        <div class="etags" id="excT"></div>
+      </div>
+    </div>
+
+    <!-- Detect -->
+    <div class="col col-detect">
+      <div class="ch">Detection</div>
+      <div class="cb">
+        <div class="hint">Detection runs on the agar plate area only. Adjust sensitivity and size range, then click Detect.</div>
+        <div class="lbl">Sensitivity — higher finds more (fainter) colonies</div>
+        <div class="sr"><input type="range" id="slSens" min="1" max="10" value="5"><div class="sv" id="vSens">5</div></div>
+        <div class="lbl">Min colony diameter (px in image)</div>
+        <div class="sr"><input type="range" id="slMin" min="8" max="60" value="8"><div class="sv" id="vMin">8</div></div>
+        <div class="lbl">Max colony diameter (px in image)</div>
+        <div class="sr"><input type="range" id="slMax" min="12" max="150" value="50"><div class="sv" id="vMax">50</div></div>
+        <button class="btn bp" id="detBtn" disabled>🔍 Detect Colonies</button>
+        <div class="note ni" id="detNote" style="margin-top:6px">Upload an image first.</div>
+      </div>
+    </div>
+
+    <!-- Filter -->
+    <div class="col col-filter">
+      <div class="ch">Quality Filters <span class="bg a" id="passBg">—</span></div>
+      <div class="cb">
+        <div class="hint">Sliders filter the detected pool. The tool auto-picks the best N colonies that pass all filters. Use ADD mode to manually pick any missed ones.</div>
+        <div class="lbl">Min isolation from neighbors (mm)</div>
+        <div class="sr"><input type="range" id="slIso" min="0" max="8" value="0" step="0.1"><div class="sv" id="vIso">0.0</div></div>
+        <div class="lbl">Min circularity (0 = any, 1 = perfect circle)</div>
+        <div class="sr"><input type="range" id="slCir" min="0" max="0.95" value="0" step="0.05"><div class="sv" id="vCir">0.00</div></div>
+        <div class="lbl">Min size — radius (px)</div>
+        <div class="sr"><input type="range" id="slSzMin" min="2" max="40" value="4" step="1"><div class="sv" id="vSzMin">4</div></div>
+        <div class="lbl">Max size — radius (px)</div>
+        <div class="sr"><input type="range" id="slSzMax" min="10" max="80" value="50" step="1"><div class="sv" id="vSzMax">50</div></div>
+        <button class="btn bs" id="rstBtn" style="margin-top:5px">↺ Reset filters</button>
+      </div>
+    </div>
+
+    <!-- Stats + Export -->
+    <div class="col col-stats">
+      <div class="ch">Status</div>
+      <div class="cb">
+        <div class="sg">
+          <div class="sb"><div class="sv2" id="stS">0</div><div class="sl2">Selected</div></div>
+          <div class="sb"><div class="sv2" id="stT">88</div><div class="sl2">Target</div></div>
+          <div class="sb"><div class="sv2" id="stA">0</div><div class="sl2">Auto</div></div>
+          <div class="sb"><div class="sv2" id="stM">0</div><div class="sl2">Manual</div></div>
+        </div>
+        <div class="prog"><div class="pf" id="pf" style="width:0%"></div></div>
+        <div class="note ni" id="sNote">Upload an image to begin.</div>
+        <button class="btn be" id="expC" disabled onclick="exportCSV()" style="margin-top:7px">⬇ Export Rearray CSV</button>
+        <button class="btn bs" id="expT" disabled onclick="exportTSV()">⬇ Export TSV Template</button>
+        <button class="btn bs" id="expI" disabled onclick="exportImage()">⬇ Export Annotated Image</button>
+        <button class="btn bs" onclick="exportSettings()">⬇ Export Settings JSON</button>
+      </div>
+    </div>
+
+    <!-- Colony list -->
+    <div class="col">
+      <div class="ch">Selected <span class="bg" id="listBg">0</span></div>
+      <div class="cb" id="cList" style="padding:4px 6px">
+        <div style="text-align:center;padding:14px 0;font-family:var(--mono);font-size:9px;color:var(--txd)">No colonies selected.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="tip"></div>
+
+<script>
+// ══════════════════════════════════════
+// STATE
+// ══════════════════════════════════════
+let imgEl=null, imgW=0, imgH=0;
+let dispSc=1, zoomSc=1;
+let allBlobs=[];   // all detected, with quality metrics
+let selected=[];   // selected colonies
+let excl=new Set();
+let mode='view';
+let tgtRows=8, tgtCols=12;
+
+// Plate calibration (px → mm)
+let plateCX=0, plateCY=0, pxPerMm=10.0;
+// Plate bounds in image pixels (detected from image)
+let plateBounds={r1:0,r2:0,c1:0,c2:0};
+let showColonyOverlay=true;
+
+const cv=document.getElementById('cv');
+const ctx=cv.getContext('2d');
+
+// ══════════════════════════════════════
+// IMAGE UPLOAD
+// ══════════════════════════════════════
+const dz=document.getElementById('dz');
+document.getElementById('fi').addEventListener('change',e=>loadImg(e.target.files[0]));
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over')});
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])loadImg(e.dataTransfer.files[0])});
+
+function loadImg(file){
+  if(!file||!file.type.startsWith('image/'))return;
+  document.getElementById('fn').textContent=file.name;
+  const r=new FileReader();
+  r.onload=ev=>{
+    imgEl=new Image();
+    imgEl.onload=()=>{
+      imgW=imgEl.width; imgH=imgEl.height;
+      detectPlateBounds();
+      fitCanvas();
+      document.getElementById('emptyState').style.display='none';
+      cv.style.display='block';
+      document.getElementById('zooms').style.display='flex';
+      document.getElementById('detBtn').disabled=false;
+      document.getElementById('detNote').textContent=`Loaded ${imgW}×${imgH}px. Click Detect.`;
+      document.getElementById('detNote').className='note ni';
+      setPill(2);
+    };
+    imgEl.src=ev.target.result;
+  };
+  r.readAsDataURL(file);
+}
+
+// ── Detect plate bounds from LED bar positions ──
+function detectPlateBounds(){
+  const off=document.createElement('canvas');
+  off.width=imgW; off.height=imgH;
+  const oc=off.getContext('2d');
+  oc.drawImage(imgEl,0,0);
+  const d=oc.getImageData(0,0,imgW,imgH).data;
+
+  // Compute row and column mean brightness
+  const rowMean=new Float32Array(imgH);
+  for(let y=0;y<imgH;y++){
+    let s=0;
+    for(let x=0;x<imgW;x++){const i=(y*imgW+x)*4;s+=(d[i]+d[i+1]+d[i+2])/3;}
+    rowMean[y]=s/imgW;
+  }
+  const colMean=new Float32Array(imgW);
+  for(let x=0;x<imgW;x++){
+    let s=0;
+    for(let y=0;y<imgH;y++){const i=(y*imgW+x)*4;s+=(d[i]+d[i+1]+d[i+2])/3;}
+    colMean[x]=s/imgH;
+  }
+
+  // Find LED bar bands: contiguous runs of bright rows/cols (mean > 120)
+  const LED=120, GAP=5, MARGIN=80, MARGIN_COL=110;
+
+  function findBands(means, len){
+    const bright=[];
+    for(let i=0;i<len;i++){if(means[i]>LED)bright.push(i);}
+    if(!bright.length)return[];
+    const bands=[];
+    let s=bright[0],p=bright[0];
+    for(let k=1;k<bright.length;k++){
+      if(bright[k]>p+GAP){bands.push([s,p]);s=bright[k];}
+      p=bright[k];
+    }
+    bands.push([s,p]);
+    return bands;
+  }
+
+  const rowBands=findBands(rowMean,imgH);
+  const colBands=findBands(colMean,imgW);
+
+  // Plate is between the LED bars + MARGIN inward
+  // Top:    bottom edge of topmost row band + MARGIN
+  // Bottom: top edge of bottommost row band - MARGIN
+  // Left:   right edge of leftmost col band + MARGIN
+  // Right:  left edge of rightmost col band - MARGIN
+  // Fallback if no LED bars detected: use 10% from edges
+  let r1,r2,c1,c2;
+  if(rowBands.length>=2){
+    r1=rowBands[0][1]+MARGIN;
+    r2=rowBands[rowBands.length-1][0]-MARGIN;
+  } else if(rowBands.length===1){
+    // Only one bar found — determine if top or bottom
+    const mid=rowBands[0][0]+rowBands[0][1]>>1;
+    if(mid<imgH/2){r1=rowBands[0][1]+MARGIN;r2=imgH-MARGIN;}
+    else{r1=MARGIN;r2=rowBands[0][0]-MARGIN;}
+  } else {
+    r1=Math.round(imgH*0.1); r2=Math.round(imgH*0.9);
+  }
+
+  if(colBands.length>=2){
+    c1=colBands[0][1]+MARGIN_COL;
+    c2=colBands[colBands.length-1][0]-MARGIN_COL;
+  } else if(colBands.length===1){
+    const mid=colBands[0][0]+colBands[0][1]>>1;
+    if(mid<imgW/2){c1=colBands[0][1]+MARGIN_COL;c2=imgW-MARGIN_COL;}
+    else{c1=MARGIN_COL;c2=colBands[0][0]-MARGIN_COL;}
+  } else {
+    c1=Math.round(imgW*0.1); c2=Math.round(imgW*0.9);
+  }
+
+  plateBounds={r1,r2,c1,c2};
+
+  // ── Calibrate to match PIXL robot coordinate system ──────────────────
+  // PIXL's pxPerMm is derived from the physical span between LED bar outer edges
+  // relative to the known Singer instrument geometry.
+  // Calibrated by fitting true image-segmentation centroids of 8 matched colonies
+  // across two independent plates: mean error vs true colony center <0.07mm,
+  // mean error vs PIXL-reported coordinates <0.15mm.
+  //
+  // Singer PIXL instrument constant: LED outer-to-outer span = 137.614mm
+  // (= SBS footprint 127.76mm + 2 × 4.927mm LED-to-plate physical gap)
+  const PIXL_LED_SPAN_MM = 137.614;
+
+  if(colBands.length>=2){
+    // Use OUTER edges of the left and right LED bars for calibration reference
+    const ledOuterL = colBands[0][0];
+    const ledOuterR = colBands[colBands.length-1][1];
+    plateCX = (ledOuterL + ledOuterR) / 2;
+    pxPerMm = (ledOuterR - ledOuterL) / PIXL_LED_SPAN_MM;
+  } else {
+    plateCX = (plateBounds.c1 + plateBounds.c2) / 2;
+    pxPerMm = (plateBounds.c2 - plateBounds.c1) / 127.76;
+  }
+  if(rowBands.length>=2){
+    // Row center from LED outer edges; reuse X pxPerMm (camera is isotropic)
+    const ledOuterT = rowBands[0][0];
+    const ledOuterB = rowBands[rowBands.length-1][1];
+    plateCY = (ledOuterT + ledOuterB) / 2;
+  } else {
+    plateCY = (plateBounds.r1 + plateBounds.r2) / 2;
+  }
+
+  console.log('LED row bands:',JSON.stringify(rowBands),'col bands:',JSON.stringify(colBands));
+  console.log('PIXL-calibrated: center=('+plateCX.toFixed(1)+','+plateCY.toFixed(1)+') px/mm='+pxPerMm.toFixed(4));
+}
+
+// ══════════════════════════════════════
+// CANVAS
+// ══════════════════════════════════════
+function fitCanvas(){
+  const v=document.getElementById('viewer');
+  const mw=v.clientWidth-4, mh=v.clientHeight-4;
+  dispSc=Math.min(mw/imgW,mh/imgH,1);
+  zoomSc=dispSc;
+  cv.width=Math.round(imgW*zoomSc);
+  cv.height=Math.round(imgH*zoomSc);
+  redraw();
+}
+
+function redraw(){
+  if(!imgEl)return;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.drawImage(imgEl,0,0,cv.width,cv.height);
+
+  // Draw plate boundary box
+  if(plateBounds.r2>0){
+    const px1=plateBounds.c1*zoomSc, py1=plateBounds.r1*zoomSc;
+    const px2=plateBounds.c2*zoomSc, py2=plateBounds.r2*zoomSc;
+    ctx.strokeStyle='rgba(0,229,192,0.25)';
+    ctx.lineWidth=1;
+    ctx.setLineDash([4,4]);
+    ctx.strokeRect(px1,py1,px2-px1,py2-py1);
+    ctx.setLineDash([]);
+  }
+
+  // Draw all detected blobs (faint, quality-colored)
+  if(showColonyOverlay){
+  const selKeys=new Set(selected.map(s=>`${Math.round(s.x)}_${Math.round(s.y)}`));
+  for(const b of allBlobs){
+    if(selKeys.has(`${Math.round(b.x)}_${Math.round(b.y)}`))continue;
+    const q=Math.min(b.quality/0.8,1);
+    if(q<0.05)continue;
+    const sx=b.x*zoomSc, sy=b.y*zoomSc, sr=Math.max(b.r*zoomSc,2);
+    ctx.beginPath();ctx.arc(sx,sy,sr,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(0,229,192,${0.07+q*0.2})`;
+    ctx.lineWidth=1; ctx.stroke();
+  }
+
+  } // end showColonyOverlay blobs
+
+  // Draw selected
+  if(showColonyOverlay){
+  for(let i=0;i<selected.length;i++){
+    const c=selected[i];
+    const sx=c.x*zoomSc, sy=c.y*zoomSc, sr=Math.max(c.r*zoomSc,5);
+    const col=c.type==='manual'?'#ff7043':'#448aff';
+    // Glow
+    ctx.beginPath();ctx.arc(sx,sy,sr+3,0,Math.PI*2);
+    ctx.strokeStyle=col+'30';ctx.lineWidth=5;ctx.stroke();
+    // Ring
+    ctx.beginPath();ctx.arc(sx,sy,sr,0,Math.PI*2);
+    ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.stroke();
+    // Center
+    ctx.beginPath();ctx.arc(sx,sy,2.5,0,Math.PI*2);
+    ctx.fillStyle=col;ctx.fill();
+    // Label
+    if(c.well){
+      const fs=Math.max(7,Math.min(sr*0.75,13));
+      ctx.font=`bold ${fs}px JetBrains Mono,monospace`;
+      ctx.textAlign='center';
+      ctx.shadowColor='#000';ctx.shadowBlur=4;
+      ctx.fillStyle='#fff';
+      ctx.fillText(c.well,sx,sy-sr-3);
+      ctx.shadowBlur=0;
+    }
+  }
+  } // end showColonyOverlay selected
+}
+
+// ══════════════════════════════════════
+// DETECTION — v1 approach: Otsu + connected components
+// Runs only inside detected plate bounds
+// ══════════════════════════════════════
+document.getElementById('detBtn').addEventListener('click', runDetect);
+
+async function runDetect(){
+  showOv('Reading plate pixels…');
+  await sleep(30);
+
+  const {r1,r2,c1,c2}=plateBounds;
+  const PH=r2-r1, PW=c2-c1;
+
+  // Extract plate pixels at full resolution
+  const off=document.createElement('canvas');
+  off.width=imgW; off.height=imgH;
+  const oc=off.getContext('2d');
+  oc.drawImage(imgEl,0,0);
+  const fullData=oc.getImageData(0,0,imgW,imgH).data;
+
+  // Build plate-only arrays
+  const gray=new Float32Array(PW*PH);
+  const redCh=new Float32Array(PW*PH);
+  for(let py=0;py<PH;py++){
+    for(let px=0;px<PW;px++){
+      const si=((py+r1)*imgW+(px+c1))*4;
+      const R=fullData[si],G=fullData[si+1],B=fullData[si+2];
+      gray[py*PW+px]=0.299*R+0.587*G+0.114*B;
+      redCh[py*PW+px]=R;
+    }
+  }
+
+  showOv('Computing Otsu threshold…');
+  await sleep(20);
+
+  // Otsu threshold on plate gray
+  const hist=new Int32Array(256);
+  for(let i=0;i<gray.length;i++) hist[Math.min(255,Math.floor(gray[i]))]++;
+  const total=PW*PH;
+  let sumT=0; for(let i=0;i<256;i++) sumT+=i*hist[i];
+  let wB=0,sumB=0,bestVar=0,otsuT=100;
+  for(let t=0;t<256;t++){
+    wB+=hist[t]; if(!wB)continue;
+    const wF=total-wB; if(!wF)break;
+    sumB+=t*hist[t];
+    const mB=sumB/wB, mF=(sumT-sumB)/wF;
+    const v=wB*wF*(mB-mF)**2;
+    if(v>bestVar){bestVar=v;otsuT=t;}
+  }
+
+  // Sensitivity adjusts threshold: sens=1→thresh+20 (strict), sens=10→thresh-20 (lenient)
+  const sens=parseInt(document.getElementById('slSens').value);
+  const adjT=otsuT-(sens-5)*4;  // sens=5 → no change; sens=10 → -20; sens=1 → +16
+  const threshold=Math.max(20,Math.min(200,adjT));
+
+  showOv(`Thresholding (Otsu=${otsuT}, using ${threshold})…`);
+  await sleep(20);
+
+  // Foreground: bright pixels above threshold
+  // For dark-background plates (agar < gray): colonies are brighter
+  const bgBrightness=gray.reduce((s,v)=>s+v,0)/gray.length;
+  const foreground=new Uint8Array(PW*PH);
+
+  if(bgBrightness<100){
+    // Dark agar bg → colonies are bright blobs
+    for(let i=0;i<gray.length;i++) foreground[i]=gray[i]>threshold?1:0;
+  } else {
+    // Light bg → use warmth/redness heuristic (brownish colonies on light agar)
+    for(let i=0;i<gray.length;i++){
+      const r=redCh[i], g=gray[i];
+      const redness=r/(g*0.587/0.299+1);
+      foreground[i]=(redness>1.05&&g>80&&g<220)?1:0;
+    }
+  }
+
+  showOv('Labeling connected components…');
+  await sleep(20);
+
+  // Connected components (union-find)
+  const labels=new Int32Array(PW*PH);
+  const uf=new UF(PW*PH+1);
+  let nextLabel=1;
+
+  for(let y=0;y<PH;y++){
+    for(let x=0;x<PW;x++){
+      const i=y*PW+x;
+      if(!foreground[i])continue;
+      const above=y>0?labels[(y-1)*PW+x]:0;
+      const left=x>0?labels[y*PW+x-1]:0;
+      if(!above&&!left){labels[i]=nextLabel;uf.make(nextLabel);nextLabel++;}
+      else if(above&&!left){labels[i]=uf.find(above);}
+      else if(!above&&left){labels[i]=uf.find(left);}
+      else{labels[i]=uf.find(above);uf.union(above,left);}
+    }
+  }
+
+  // Collect blob stats
+  const blobMap={};
+  for(let y=0;y<PH;y++){
+    for(let x=0;x<PW;x++){
+      const l=labels[y*PW+x];
+      if(!l)continue;
+      const root=uf.find(l);
+      if(!blobMap[root]) blobMap[root]={n:0,sx:0,sy:0,x1:x,x2:x,y1:y,y2:y};
+      const b=blobMap[root];
+      b.n++;b.sx+=x;b.sy+=y;
+      if(x<b.x1)b.x1=x;if(x>b.x2)b.x2=x;
+      if(y<b.y1)b.y1=y;if(y>b.y2)b.y2=y;
+    }
+  }
+
+  showOv('Scoring blobs…');
+  await sleep(20);
+
+  const minR=parseInt(document.getElementById('slMin').value)/2;
+  const maxR=parseInt(document.getElementById('slMax').value)/2;
+
+  const raw=[];
+  for(const b of Object.values(blobMap)){
+    const rX=(b.x2-b.x1)/2, rY=(b.y2-b.y1)/2;
+    const r=(rX+rY)/2;
+    if(r<minR||r>maxR)continue;
+    const area=b.n;
+    const perim=2*Math.PI*r;
+    const circ=Math.min((4*Math.PI*area)/(perim*perim+1e-9),1);
+    const cx=b.sx/b.n+c1;  // back to full-image coords
+    const cy=b.sy/b.n+r1;
+    raw.push({
+      x:cx, y:cy, r:r,
+      x_mm:(cx-plateCX)/pxPerMm,
+      y_mm:(cy-plateCY)/pxPerMm,
+      circularity:circ,
+      area:area
+    });
+  }
+
+  // Filter to SBS plate working area (±63.88mm x ±42.74mm)
+  const SBS_X=63.88, SBS_Y=42.74;
+  const plateFiltered=raw.filter(b=>Math.abs(b.x_mm)<=SBS_X && Math.abs(b.y_mm)<=SBS_Y);
+  raw.length=0; plateFiltered.forEach(b=>raw.push(b));
+
+  // Compute nearest-neighbor edge distances
+  const pos=raw.map(b=>[b.x,b.y]);
+  const rads=raw.map(b=>b.r);
+  for(let i=0;i<raw.length;i++){
+    let minEdge=Infinity;
+    for(let j=0;j<raw.length;j++){
+      if(i===j)continue;
+      const d=Math.hypot(pos[i][0]-pos[j][0],pos[i][1]-pos[j][1]);
+      const ed=d-rads[i]-rads[j];
+      if(ed<minEdge)minEdge=ed;
+    }
+    raw[i].nn_mm=Math.max(0,minEdge)/pxPerMm;
+  }
+
+  // Quality score:
+  // - Single colonies at ~10 px/mm are typically 0.3–1.5mm radius = 3–15px.
+  //   Blobs larger than 1.8mm radius are very likely merged/multiple colonies.
+  // - Hard discard: circularity < 0.65 (non-circular = debris or plastic edge).
+  // - Size penalty: radius in mm — score drops sharply past 1.5mm.
+  // - Isolation weighted heavily so touching colonies rank last.
+  for(const b of raw){
+    const r_mm=b.r/pxPerMm;
+    // Hard discard non-circular blobs (debris, plastic frame, irregular clumps)
+    if(b.circularity<0.65){b.quality=0;continue;}
+    // Size score: peaks at 0.8mm radius, falls linearly, sharply penalizes >1.5mm
+    const idealR_mm=0.8;
+    const sizeScore=r_mm<=1.5
+      ? Math.max(0, 1-Math.abs(r_mm-idealR_mm)/1.5)
+      : Math.max(0, 1-(r_mm-1.5)*1.5);  // steep drop-off for likely-merged blobs
+    // Circularity score: quadratic so near-perfect circles score much better
+    const circScore=b.circularity*b.circularity;
+    b.quality=circScore*0.35 + sizeScore*0.15 + Math.min(b.nn_mm/2,1)*0.5;
+  }
+
+  allBlobs=raw;
+  allBlobs.sort((a,b)=>b.quality-a.quality);
+
+  document.getElementById('detNote').textContent=`✓ ${allBlobs.length} candidates detected inside plate.`;
+  document.getElementById('detNote').className='note nok';
+  document.getElementById('passBg').textContent=`${allBlobs.length} total`;
+  document.getElementById('modebar').style.display='flex';
+  setPill(3);
+
+  applyFilters();
+  hideOv();
+  redraw();
+}
+
+// Simple Union-Find
+class UF{
+  constructor(n){this.p=new Int32Array(n);this.r=new Uint8Array(n);}
+  make(x){this.p[x]=x;this.r[x]=0;}
+  find(x){while(this.p[x]!==x){this.p[x]=this.p[this.p[x]];x=this.p[x];}return x;}
+  union(a,b){const pa=this.find(a),pb=this.find(b);if(pa===pb)return;
+    if(this.r[pa]<this.r[pb])this.p[pa]=pb;
+    else if(this.r[pa]>this.r[pb])this.p[pb]=pa;
+    else{this.p[pb]=pa;this.r[pa]++;}}
+}
+
+// ══════════════════════════════════════
+// FILTERS — live update on slider change
+// ══════════════════════════════════════
+function applyFilters(){
+  const minIso=parseFloat(document.getElementById('slIso').value);
+  const minCir=parseFloat(document.getElementById('slCir').value);
+  const minSz=parseFloat(document.getElementById('slSzMin').value);
+  const maxSz=parseFloat(document.getElementById('slSzMax').value);
+
+  const passing=allBlobs.filter(b=>
+    b.nn_mm>=minIso && b.circularity>=minCir && b.r>=minSz && b.r<=maxSz
+  );
+  document.getElementById('passBg').textContent=`${passing.length} passing`;
+
+  const target=parseInt(document.getElementById('tgtC').value)||88;
+  document.getElementById('stT').textContent=target;
+  updTgtCfg();
+  const wells=availWells();
+  const manuals=selected.filter(s=>s.type==='manual');
+  const usedW=new Set(manuals.map(m=>m.well));
+  const openW=wells.filter(w=>!usedW.has(w));
+  const take=Math.min(passing.length,openW.length,target-manuals.length);
+
+  selected=[...manuals,...passing.slice(0,Math.max(0,take)).map((b,i)=>({...b,type:'auto',well:openW[i]}))];
+  updateUI();
+  redraw();
+}
+
+function setupFilterListeners(){
+  const pairs=[['slIso','vIso',1],['slCir','vCir',2],['slSzMin','vSzMin',0],['slSzMax','vSzMax',0]];
+  pairs.forEach(([sid,vid,dec])=>{
+    document.getElementById(sid).addEventListener('input',()=>{
+      const v=parseFloat(document.getElementById(sid).value);
+      document.getElementById(vid).textContent=v.toFixed(dec);
+      applyFilters();
+    });
+  });
+  document.getElementById('tgtC').addEventListener('input',applyFilters);
+  document.getElementById('tgtF').addEventListener('change',()=>{updTgtCfg();applyFilters();});
+  document.getElementById('rstBtn').addEventListener('click',()=>{
+    document.getElementById('slIso').value=0;document.getElementById('vIso').textContent='0.0';
+    document.getElementById('slCir').value=0;document.getElementById('vCir').textContent='0.00';
+    document.getElementById('slSzMin').value=4;document.getElementById('vSzMin').textContent='4';
+    document.getElementById('slSzMax').value=50;document.getElementById('vSzMax').textContent='50';
+    applyFilters();
+  });
+}
+setupFilterListeners();
+
+// Detect slider display-only
+['slSens','slMin','slMax'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',e=>{
+    const vid='v'+id.slice(2);
+    document.getElementById(vid).textContent=e.target.value;
+  });
+});
+
+// ══════════════════════════════════════
+// WELLS
+// ══════════════════════════════════════
+function updTgtCfg(){
+  const f=document.getElementById('tgtF').value;
+  if(f.includes('384')){tgtRows=16;tgtCols=24;}else{tgtRows=8;tgtCols=12;}
+}
+function availWells(){
+  const w=[];
+  for(let r=0;r<tgtRows;r++) for(let c=1;c<=tgtCols;c++){
+    const wl=String.fromCharCode(65+r)+c;
+    if(!excl.has(wl))w.push(wl);
+  }
+  return w;
+}
+function parseExcl(s){
+  const out=new Set();
+  s.split(',').map(x=>x.trim()).filter(Boolean).forEach(p=>{
+    const rng=p.match(/^([A-Z])(\d+)-\1(\d+)$/i);
+    if(rng){for(let c=+rng[2];c<=+rng[3];c++)out.add(rng[1].toUpperCase()+c);}
+    else{const m=p.match(/^([A-Z])(\d+)$/i);if(m)out.add(m[1].toUpperCase()+m[2]);}
+  });
+  return out;
+}
+function renderExcl(){
+  document.getElementById('excT').innerHTML=[...excl].map(w=>`<div class="et" onclick="rmExcl('${w}')">${w} ×</div>`).join('');
+}
+function rmExcl(w){excl.delete(w);renderExcl();if(allBlobs.length)applyFilters();}
+document.getElementById('excI').addEventListener('input',e=>{
+  excl=parseExcl(e.target.value);renderExcl();if(allBlobs.length)applyFilters();
+});
+function reassignWells(){
+  updTgtCfg();const ws=availWells();let wi=0;
+  for(const c of selected)c.well=wi<ws.length?ws[wi++]:null;
+}
+
+// ══════════════════════════════════════
+// CANVAS INTERACTION
+// ══════════════════════════════════════
+cv.addEventListener('click',e=>{
+  if(!imgEl)return;
+  const[ix,iy]=c2i(e);
+  if(mode==='add'){
+    // Snap to nearest unselected blob
+    const bh=nearB(ix,iy,50/zoomSc);
+    let entry;
+    if(bh!==-1) entry={...allBlobs[bh],type:'manual'};
+    else entry={x:ix,y:iy,r:10,type:'manual',
+      x_mm:(ix-plateCX)/pxPerMm,y_mm:(iy-plateCY)/pxPerMm,
+      circularity:0,nn_mm:0,quality:0};
+    const ws=availWells().filter(w=>!selected.find(s=>s.well===w));
+    entry.well=ws[0]||null;
+    selected.push(entry);updateUI();redraw();
+  }else if(mode==='rm'){
+    const h=nearS(ix,iy,50/zoomSc);
+    if(h!==-1){selected.splice(h,1);reassignWells();updateUI();redraw();}
+  }else{
+    const h=nearS(ix,iy,50/zoomSc);
+    if(h!==-1)scrollToItem(h);
+  }
+});
+
+cv.addEventListener('contextmenu',e=>{
+  e.preventDefault();
+  const[ix,iy]=c2i(e);
+  const h=nearS(ix,iy,50/zoomSc);
+  if(h!==-1){selected.splice(h,1);reassignWells();updateUI();redraw();}
+});
+
+cv.addEventListener('mousemove',e=>{
+  if(!imgEl)return;
+  const[ix,iy]=c2i(e);
+  const tip=document.getElementById('tip');
+  const hs=nearS(ix,iy,40/zoomSc);
+  if(hs!==-1){
+    const c=selected[hs];
+    tip.style.display='block';
+    tip.style.left=(e.clientX+14)+'px';
+    tip.style.top=(e.clientY-10)+'px';
+    tip.innerHTML=`<div class="tn">${c.well||'?'} · ${c.type}</div>
+      <div>Circularity: ${c.circularity.toFixed(2)}</div>
+      <div>Isolation: ${c.nn_mm.toFixed(2)} mm</div>
+      <div>Radius: ${c.r.toFixed(1)} px</div>
+      <div>Quality: ${c.quality.toFixed(3)}</div>`;
+  }else{
+    const hb=nearB(ix,iy,30/zoomSc);
+    if(hb!==-1&&mode==='add'){
+      const b=allBlobs[hb];
+      tip.style.display='block';
+      tip.style.left=(e.clientX+14)+'px';
+      tip.style.top=(e.clientY-10)+'px';
+      tip.innerHTML=`<div class="tn">Detected Colony</div>
+        <div>Quality: ${b.quality.toFixed(3)}</div>
+        <div>Isolation: ${b.nn_mm.toFixed(2)} mm</div>
+        <div>Click to add</div>`;
+    }else tip.style.display='none';
+  }
+});
+
+cv.addEventListener('mouseleave',()=>{document.getElementById('tip').style.display='none';});
+
+function c2i(e){
+  const r=cv.getBoundingClientRect();
+  return[(e.clientX-r.left)*(cv.width/r.width)/zoomSc,
+         (e.clientY-r.top)*(cv.height/r.height)/zoomSc];
+}
+function nearS(ix,iy,md){
+  let best=-1,bd=md;
+  selected.forEach((c,i)=>{const d=Math.hypot(c.x-ix,c.y-iy);if(d<bd){bd=d;best=i;}});
+  return best;
+}
+function nearB(ix,iy,md){
+  const sk=new Set(selected.map(s=>`${Math.round(s.x)}_${Math.round(s.y)}`));
+  let best=-1,bd=md;
+  allBlobs.forEach((b,i)=>{
+    if(sk.has(`${Math.round(b.x)}_${Math.round(b.y)}`))return;
+    const d=Math.hypot(b.x-ix,b.y-iy);if(d<bd){bd=d;best=i;}
+  });
+  return best;
+}
+
+// ══════════════════════════════════════
+// MODE
+// ══════════════════════════════════════
+function toggleOverlay(){
+  showColonyOverlay=!showColonyOverlay;
+  const btn=document.getElementById('mOv');
+  btn.classList.toggle('on',showColonyOverlay);
+  redraw();
+}
+function setMode(m){
+  mode=m;
+  ['view','add','rm'].forEach(id=>{
+    document.getElementById('m'+id[0].toUpperCase()+id.slice(1)).classList.toggle('on',id===m);
+  });
+  cv.style.cursor=m==='add'?'crosshair':m==='rm'?'cell':'default';
+}
+
+// ══════════════════════════════════════
+// ZOOM
+// ══════════════════════════════════════
+function zBy(f){
+  zoomSc=Math.max(dispSc*0.4,Math.min(zoomSc*f,dispSc*10));
+  cv.width=Math.round(imgW*zoomSc);cv.height=Math.round(imgH*zoomSc);
+  redraw();
+}
+function zReset(){fitCanvas();}
+
+// ══════════════════════════════════════
+// UI UPDATE
+// ══════════════════════════════════════
+function updateUI(){
+  const tgt=parseInt(document.getElementById('tgtC').value)||88;
+  const aN=selected.filter(s=>s.type==='auto').length;
+  const mN=selected.filter(s=>s.type==='manual').length;
+  const pct=Math.min(selected.length/tgt,1)*100;
+
+  document.getElementById('stS').textContent=selected.length;
+  document.getElementById('stT').textContent=tgt;
+  document.getElementById('stA').textContent=aN;
+  document.getElementById('stM').textContent=mN;
+  document.getElementById('pf').style.width=pct+'%';
+  document.getElementById('listBg').textContent=selected.length;
+
+  const n=document.getElementById('sNote');
+  if(selected.length>=tgt){
+    n.className='note nok';n.textContent=`✓ ${selected.length}/${tgt} colonies selected.`;
+    setPill(4);document.getElementById('expC').disabled=false;document.getElementById('expT').disabled=false;document.getElementById('expI').disabled=false;
+  }else if(allBlobs.length){
+    n.className='note nw';
+    n.textContent=`${selected.length}/${tgt} — lower filter thresholds or use ADD mode to pick manually.`;
+    document.getElementById('expC').disabled=false;document.getElementById('expT').disabled=false;document.getElementById('expI').disabled=false;
+  }else{
+    n.className='note ni';n.textContent='Run detection to find colonies.';
+  }
+  renderList();
+}
+
+function renderList(){
+  const el=document.getElementById('cList');
+  if(!selected.length){
+    el.innerHTML='<div style="text-align:center;padding:14px 0;font-family:var(--mono);font-size:9px;color:var(--txd)">No colonies selected.</div>';
+    return;
+  }
+  el.innerHTML=selected.map((c,i)=>`
+    <div class="ci ${c.type==='manual'?'m':'a'}" onclick="hlC(${i})">
+      <div class="cd" style="background:${c.type==='manual'?'#ff7043':'#448aff'}"></div>
+      <div class="cw">${c.well||'?'}</div>
+      <div class="csc">${c.quality.toFixed(2)}</div>
+      <div class="ct ${c.type==='manual'?'m':'a'}">${c.type==='manual'?'MAN':'AUTO'}</div>
+      <button class="crm" onclick="event.stopPropagation();rmC(${i})">×</button>
+    </div>`).join('');
+}
+
+function hlC(i){
+  const c=selected[i];
+  redraw();
+  const sx=c.x*zoomSc,sy=c.y*zoomSc;
+  ctx.beginPath();ctx.arc(sx,sy,(c.r||10)*zoomSc+8,0,Math.PI*2);
+  ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
+  scrollToItem(i);
+}
+function scrollToItem(i){
+  const items=document.querySelectorAll('.ci');
+  if(items[i])items[i].scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+function rmC(i){selected.splice(i,1);reassignWells();updateUI();redraw();}
+
+function setPill(n){
+  for(let i=1;i<=4;i++)document.getElementById('p'+i).className='pill'+(i<n?' done':i===n?' on':'');
+}
+
+// ══════════════════════════════════════
+// EXPORT — PIXL rearray format
+// Format: SourceName, Y_mm, X_mm, TargetName, RowLetter, ColNum
+// ══════════════════════════════════════
+function pxToMm(px,py){
+  return{x_mm:(px-plateCX)/pxPerMm, y_mm:(py-plateCY)/pxPerMm};
+}
+function exportCSV(){
+  const src=document.getElementById('srcN').value||'SourcePlate1';
+  const tgt=document.getElementById('tgtN').value||'TargetPlate1';
+  const[tt,tw]=document.getElementById('tgtF').value.split('_');
+  let csv=`${src},SBS,None,Source,,\n${tgt},${tt},${tw},Target,,\n`;
+  for(const c of selected){
+    if(!c.well)continue;
+    const m=c.well.match(/^([A-Z])(\d+)$/);if(!m)continue;
+    const{x_mm,y_mm}=pxToMm(c.x,c.y);
+    csv+=`${src},${y_mm.toFixed(8)},${x_mm.toFixed(8)},${tgt},${m[1]},${m[2]}\n`;
+  }
+  dl(csv,`${tgt}_RearrayFile.csv`,'text/csv');
+}
+function exportTSV(){
+  const src=document.getElementById('srcN').value||'SourcePlate1';
+  let tsv=`${src}\tSBS\tNONE\tSource\n`;
+  for(const c of selected){
+    const{x_mm,y_mm}=pxToMm(c.x,c.y);
+    tsv+=`${src}\t${y_mm.toFixed(3)}\t${x_mm.toFixed(3)}\n`;
+  }
+  dl(tsv,`${src}_RearrayTemplate.tsv`,'text/tab-separated-values');
+}
+function dl(content,name,mime){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type:mime}));
+  a.download=name;a.click();
+}
+
+
+// ══════════════════════════════════════
+// EXPORT — ANNOTATED IMAGE
+// ══════════════════════════════════════
+function exportImage(){
+  const off=document.createElement('canvas');
+  off.width=imgW; off.height=imgH;
+  const oc=off.getContext('2d');
+  oc.drawImage(imgEl,0,0);
+
+  // Draw plate boundary
+  const{r1,r2,c1,c2}=plateBounds;
+  oc.strokeStyle='rgba(0,229,192,0.7)';oc.lineWidth=3;oc.setLineDash([8,4]);
+  oc.strokeRect(c1,r1,c2-c1,r2-r1);oc.setLineDash([]);
+
+  // Draw detected (unselected) blobs faintly
+  const selKeys=new Set(selected.map(s=>`${Math.round(s.x)}_${Math.round(s.y)}`));
+  for(const b of allBlobs){
+    if(selKeys.has(`${Math.round(b.x)}_${Math.round(b.y)}`))continue;
+    const q=Math.min(b.quality/0.8,1);
+    if(q<0.05)continue;
+    oc.beginPath();oc.arc(b.x,b.y,Math.max(b.r,4),0,Math.PI*2);
+    oc.strokeStyle=`rgba(0,229,192,${0.15+q*0.25})`;oc.lineWidth=1.5;oc.stroke();
+  }
+
+  // Draw selected colonies
+  for(const c of selected){
+    const col=c.type==='manual'?'#ff7043':'#448aff';
+    const r=Math.max(c.r,8);
+    // Glow
+    oc.beginPath();oc.arc(c.x,c.y,r+4,0,Math.PI*2);
+    oc.strokeStyle=col+'50';oc.lineWidth=6;oc.stroke();
+    // Ring
+    oc.beginPath();oc.arc(c.x,c.y,r,0,Math.PI*2);
+    oc.strokeStyle=col;oc.lineWidth=2.5;oc.stroke();
+    // Center dot
+    oc.beginPath();oc.arc(c.x,c.y,3,0,Math.PI*2);
+    oc.fillStyle=col;oc.fill();
+    // Well label
+    if(c.well){
+      const fs=Math.max(11,Math.min(Math.round(r*0.9),20));
+      oc.font=`bold ${fs}px JetBrains Mono,monospace`;
+      oc.textAlign='center';
+      oc.shadowColor='#000';oc.shadowBlur=5;
+      oc.fillStyle='#fff';
+      oc.fillText(c.well,c.x,c.y-r-5);
+      oc.shadowBlur=0;
+    }
+  }
+
+  const src=document.getElementById('srcN').value||'SourcePlate1';
+  off.toBlob(blob=>{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`${src}_annotated.png`;a.click();
+  },'image/png');
+}
+
+// ══════════════════════════════════════
+// EXPORT — SETTINGS JSON
+// ══════════════════════════════════════
+function exportSettings(){
+  const src=document.getElementById('srcN').value||'SourcePlate1';
+  const settings={
+    timestamp: new Date().toISOString(),
+    sourcePlate: src,
+    targetPlate: document.getElementById('tgtN').value||'TargetPlate1',
+    targetFormat: document.getElementById('tgtF').value,
+    colonyCount: parseInt(document.getElementById('tgtC').value)||88,
+    excludedWells: [...excl],
+    detection:{
+      sensitivity: parseInt(document.getElementById('slSens').value),
+      minDiameterPx: parseInt(document.getElementById('slMin').value),
+      maxDiameterPx: parseInt(document.getElementById('slMax').value),
+    },
+    filters:{
+      minIsolationMm: parseFloat(document.getElementById('slIso').value),
+      minCircularity: parseFloat(document.getElementById('slCir').value),
+      minRadiusPx: parseInt(document.getElementById('slSzMin').value),
+      maxRadiusPx: parseInt(document.getElementById('slSzMax').value),
+    },
+    results:{
+      totalDetected: allBlobs.length,
+      totalSelected: selected.length,
+      autoSelected: selected.filter(s=>s.type==='auto').length,
+      manualSelected: selected.filter(s=>s.type==='manual').length,
+    },
+    calibration:{
+      plateBounds,
+      plateCenterPx: {x:plateCX, y:plateCY},
+      pxPerMm,
+    },
+    colonies: selected.map(c=>({
+      well: c.well,
+      type: c.type,
+      x_px: Math.round(c.x),
+      y_px: Math.round(c.y),
+      x_mm: parseFloat(((c.x-plateCX)/pxPerMm).toFixed(4)),
+      y_mm: parseFloat(((c.y-plateCY)/pxPerMm).toFixed(4)),
+      radius_px: parseFloat(c.r.toFixed(1)),
+      circularity: parseFloat(c.circularity.toFixed(3)),
+      isolation_mm: parseFloat(c.nn_mm.toFixed(3)),
+      quality: parseFloat(c.quality.toFixed(4)),
+    })),
+  };
+  dl(JSON.stringify(settings,null,2),`${src}_settings.json`,'application/json');
+}
+
+// ══════════════════════════════════════
+// LOADING
+// ══════════════════════════════════════
+function showOv(msg,sub=''){
+  document.getElementById('ov').style.display='flex';
+  document.getElementById('lm').textContent=msg;
+  document.getElementById('ls').textContent=sub;
+}
+function hideOv(){document.getElementById('ov').style.display='none';}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+</script>
+</body>
+</html>
