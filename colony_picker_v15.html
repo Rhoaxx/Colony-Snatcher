@@ -1,0 +1,1944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Colony Picker v15 — PIXL Rearray</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700&display=swap');
+:root{
+  --bg:#07090e;--surf:#0c1219;--panel:#101820;--bdr:#182534;--bdr2:#1e3045;
+  --acc:#00e5c0;--accd:rgba(0,229,192,.1);--ora:#ff7043;--blu:#448aff;
+  --warn:#ffca28;--bad:#ef5350;--good:#66bb6a;
+  --tx:#b8cfe0;--txm:#6a90aa;--txd:#2d4a60;
+  --mono:'JetBrains Mono',monospace;--sans:'Syne',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:var(--sans);background:var(--bg);color:var(--tx)}
+
+/* HEADER */
+.hdr{display:flex;align-items:center;gap:10px;padding:0 16px;height:40px;
+  background:var(--panel);border-bottom:1px solid var(--bdr);flex-shrink:0}
+.logo{font-family:var(--mono);font-size:13px;color:var(--acc);font-weight:700;letter-spacing:1px}
+.logo em{color:var(--txm);font-style:normal;font-weight:400}
+.pills{display:flex;gap:3px;margin-left:auto}
+.pill{font-family:var(--mono);font-size:9px;padding:3px 9px;border-radius:10px;
+  border:1px solid var(--bdr2);color:var(--txd);transition:all .2s}
+.pill.on{border-color:var(--acc);color:var(--acc);background:var(--accd)}
+.pill.done{border-color:var(--good);color:var(--good)}
+
+/* LAYOUT */
+.app{display:flex;flex-direction:column;height:calc(100vh - 40px)}
+
+/* VIEWER — top, flexible */
+.viewer{flex:1;min-height:0;background:#030507;position:relative;
+  display:flex;align-items:center;justify-content:center;overflow:hidden}
+#cv{display:none;image-rendering:pixelated}
+
+.empty{display:flex;flex-direction:column;align-items:center;gap:10px;
+  opacity:.4;pointer-events:none;user-select:none}
+.empty .ico{font-size:54px}
+.empty p{font-family:var(--mono);font-size:11px;color:var(--txm);text-align:center;line-height:1.8}
+
+.modebar{position:absolute;top:9px;left:50%;transform:translateX(-50%);display:none;
+  gap:2px;background:rgba(10,15,22,.92);border:1px solid var(--bdr2);
+  border-radius:18px;padding:3px;backdrop-filter:blur(6px)}
+.mb{font-family:var(--mono);font-size:10px;padding:4px 13px;border-radius:13px;
+  border:none;background:transparent;color:var(--txm);cursor:pointer;transition:all .15s}
+.mb.on{background:var(--acc);color:#000;font-weight:700}
+.mb:not(.on):hover{color:var(--tx)}
+
+.zooms{position:absolute;bottom:9px;right:9px;display:none;gap:3px}
+.zb{width:27px;height:27px;background:rgba(10,15,22,.85);border:1px solid var(--bdr2);
+  color:var(--txm);border-radius:3px;cursor:pointer;font-size:14px;
+  display:flex;align-items:center;justify-content:center;transition:all .15s}
+.zb:hover{border-color:var(--acc);color:var(--acc)}
+
+.overlay{position:absolute;inset:0;background:rgba(7,9,14,.9);display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:50}
+.spin{width:34px;height:34px;border:3px solid rgba(0,229,192,.2);
+  border-top-color:var(--acc);border-radius:50%;animation:sp .65s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.lm{font-family:var(--mono);font-size:12px;color:var(--acc)}
+.ls{font-family:var(--mono);font-size:10px;color:var(--txm)}
+
+#tip{position:fixed;background:var(--panel);border:1px solid var(--bdr2);
+  border-radius:5px;padding:8px 10px;font-family:var(--mono);font-size:10px;
+  pointer-events:none;z-index:300;display:none;line-height:1.7;
+  box-shadow:0 8px 24px rgba(0,0,0,.6)}
+#tip .tn{color:var(--acc);font-size:11px;font-weight:700;margin-bottom:2px}
+
+/* BOTTOM PANEL */
+.btm{height:285px;flex-shrink:0;display:flex;border-top:1px solid var(--bdr);background:var(--surf)}
+
+/* Columns */
+.col{border-right:1px solid var(--bdr);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+.col:last-child{border-right:none;flex:1;min-width:150px}
+.ch{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--txd);
+  text-transform:uppercase;padding:7px 12px 5px;border-bottom:1px solid var(--bdr);
+  display:flex;align-items:center;gap:6px;flex-shrink:0}
+.ch .bg{background:var(--bdr2);color:var(--txm);font-size:8px;padding:1px 5px;border-radius:8px}
+.ch .bg.a{background:var(--accd);color:var(--acc)}
+.cb{flex:1;overflow-y:auto;padding:8px 12px}
+
+.col-setup{width:248px}
+.col-detect{width:238px}
+.col-filter{width:228px}
+.col-stats{width:180px}
+
+/* Form elements */
+.lbl{display:block;font-family:var(--mono);font-size:9px;color:var(--txm);margin-bottom:2px;margin-top:7px}
+.lbl:first-child{margin-top:0}
+input[type=text],input[type=number],select{
+  width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--tx);
+  padding:5px 8px;font-family:var(--mono);font-size:11px;border-radius:3px;outline:none;transition:border-color .15s}
+input:focus,select:focus{border-color:var(--acc)}
+select option{background:var(--panel)}
+
+.drop{border:1.5px dashed var(--bdr2);border-radius:4px;padding:10px;
+  text-align:center;cursor:pointer;transition:all .2s;position:relative;background:var(--bg);margin-bottom:5px}
+.drop:hover,.drop.over{border-color:var(--acc);background:var(--accd)}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-i{font-size:18px;margin-bottom:1px}
+.drop-t{font-family:var(--mono);font-size:9px;color:var(--txm);line-height:1.3}
+.drop-n{font-size:8px;color:var(--acc);margin-top:1px;font-family:var(--mono);word-break:break-all}
+
+.etags{display:flex;flex-wrap:wrap;gap:2px;margin-top:4px}
+.et{font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:2px;
+  background:rgba(239,83,80,.08);border:1px solid rgba(239,83,80,.2);color:var(--bad);cursor:pointer}
+.et:hover{background:rgba(239,83,80,.18)}
+
+.btn{display:flex;align-items:center;justify-content:center;gap:5px;
+  width:100%;padding:7px;border-radius:3px;border:none;cursor:pointer;
+  font-family:var(--sans);font-size:12px;font-weight:600;transition:all .15s;margin-top:5px}
+.bp{background:var(--acc);color:#000}.bp:hover{background:#00ffd4}
+.bp:disabled{background:#082820;color:var(--txd);cursor:not-allowed}
+.bs{background:transparent;border:1px solid var(--bdr2);color:var(--txm)}
+.bs:hover{border-color:var(--blu);color:var(--blu)}
+.bs:disabled{opacity:.35;cursor:not-allowed}
+.be{background:var(--ora);color:#fff}.be:hover{background:#ff8a65}
+.be:disabled{background:#280d06;color:var(--txd);cursor:not-allowed}
+
+.sr{display:flex;align-items:center;gap:6px;margin-top:4px}
+.sr input[type=range]{flex:1;-webkit-appearance:none;height:2px;border-radius:1px;
+  background:var(--bdr2);outline:none;cursor:pointer}
+.sr input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;
+  border-radius:50%;background:var(--acc);cursor:pointer;transition:transform .1s}
+.sr input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.3)}
+.sv{font-family:var(--mono);font-size:10px;color:var(--acc);min-width:32px;text-align:right;flex-shrink:0}
+
+/* Stats */
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.sb{background:var(--bg);border:1px solid var(--bdr);border-radius:3px;padding:6px;text-align:center}
+.sv2{font-family:var(--mono);font-size:19px;font-weight:700;color:var(--acc)}
+.sv2.w{color:var(--warn)}.sv2.g{color:var(--good)}
+.sl2{font-family:var(--mono);font-size:8px;color:var(--txd);margin-top:1px}
+.prog{background:var(--bg);border-radius:2px;height:3px;overflow:hidden;margin-top:6px}
+.pf{height:100%;background:linear-gradient(90deg,var(--acc),var(--blu));border-radius:2px;transition:width .4s}
+.note{padding:6px 8px;border-radius:3px;font-family:var(--mono);font-size:9px;margin-top:5px;line-height:1.4}
+.nok{background:rgba(102,187,106,.07);border:1px solid rgba(102,187,106,.18);color:var(--good)}
+.nw{background:rgba(255,202,40,.07);border:1px solid rgba(255,202,40,.18);color:var(--warn)}
+.ni{background:rgba(68,138,255,.07);border:1px solid rgba(68,138,255,.18);color:var(--blu)}
+
+/* Colony list */
+.ci{display:flex;align-items:center;gap:5px;padding:4px 5px;border-radius:3px;margin-bottom:1px;
+  cursor:pointer;border:1px solid transparent;font-family:var(--mono);font-size:9px;transition:background .1s}
+.ci:hover{background:rgba(255,255,255,.03)}
+.ci.a{background:rgba(68,138,255,.06);border-color:rgba(68,138,255,.15)}
+.ci.m{background:rgba(255,112,67,.06);border-color:rgba(255,112,67,.15)}
+.cd{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.cw{color:var(--tx);flex:1;font-weight:500}
+.csc{color:var(--txm);font-size:8px}
+.ct{font-size:8px;padding:1px 4px;border-radius:2px;flex-shrink:0}
+.ct.a{background:rgba(68,138,255,.14);color:var(--blu)}
+.ct.m{background:rgba(255,112,67,.14);color:var(--ora)}
+.crm{width:13px;height:13px;border-radius:50%;border:1px solid var(--bdr2);
+  background:transparent;color:var(--txm);font-size:9px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.crm:hover{border-color:var(--bad);color:var(--bad)}
+
+.hint{font-family:var(--mono);font-size:9px;color:var(--txm);line-height:1.4;margin-bottom:5px}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--bdr2)}::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">◉ COLONY<em>/</em>PICKER</div>
+  <div style="font-family:var(--mono);font-size:9px;color:var(--txd)">PIXL Rearray · Singer Instruments</div>
+  <div class="pills">
+    <div class="pill on" id="p1">1 · Upload</div>
+    <div class="pill"    id="p2">2 · Detect</div>
+    <div class="pill"    id="p3">3 · Filter</div>
+    <div class="pill"    id="p4">4 · Export</div>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- VIEWER -->
+  <div class="viewer" id="viewer">
+    <div class="empty" id="emptyState">
+      <div class="ico">🧫</div>
+      <p>Upload a plate image to begin.<br>Colonies are detected inside the agar plate only.<br>Filter sliders refine the auto-selection.</p>
+    </div>
+    <div id="cvwrap" style="position:absolute;inset:0;overflow:auto;display:flex;scrollbar-width:thin"><canvas id="cv" style="margin:auto"></canvas></div>
+
+    <div class="modebar" id="modebar">
+      <button class="mb on" id="mV" onclick="setMode('view')">VIEW</button>
+      <button class="mb"    id="mA" onclick="setMode('add')">+ ADD</button>
+      <button class="mb"    id="mR" onclick="setMode('rm')">− REMOVE</button>
+      <button class="mb on" id="mOv" onclick="toggleOverlay()" title="Toggle colony circles">◉ OVERLAY</button>
+    </div>
+
+    <div class="zooms" id="zooms">
+      <button class="zb" onclick="zBy(1.35)">+</button>
+      <button class="zb" onclick="zBy(0.74)">−</button>
+      <button class="zb" onclick="zReset()" title="Fit">⊙</button>
+    </div>
+
+    <div class="overlay" id="ov">
+      <div class="spin"></div>
+      <div class="lm" id="lm">Working…</div>
+      <div class="ls" id="ls"></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM -->
+  <div class="btm">
+
+    <!-- Setup -->
+    <div class="col col-setup">
+      <div class="ch">Setup</div>
+      <div class="cb">
+        <div class="drop" id="dz">
+          <input type="file" id="fi" accept="image/*">
+          <div class="drop-i">🔬</div>
+          <div class="drop-t">Drop plate image or click to browse</div>
+          <div class="drop-n" id="fn"></div>
+        </div>
+        <div class="lbl">Source plate type</div>
+        <select id="plType">
+          <option value="sbs">SBS rectangular</option>
+          <option value="sbs8">SBS 8-well plate (Shimadzu compartments)</option>
+          <option value="petri">Petri dish (90 mm)</option>
+        </select>
+        <div class="lbl">Sectoring layer (optional)</div>
+        <select id="plSect"></select>
+        <input type="file" id="sectFile" accept=".xml" style="display:none">
+        <div class="hint" id="sectInfo" style="margin-top:3px"></div>
+        <div id="sectBox" style="display:none">
+          <div class="lbl">Colonies per sector (target)</div>
+          <input type="number" id="perSecK" value="11" min="1" max="96">
+          <div id="secChkWrap"><div class="lbl">Sectors to pick from</div>
+          <div id="secChk" style="display:flex;gap:6px;flex-wrap:wrap;font-family:var(--mono);font-size:10px"></div></div>
+        </div>
+        <div class="lbl" style="display:flex;gap:6px;align-items:center" title="Off = only clean single colonies are picked (sectors without one stay empty). On = a sector or plate that falls short is topped up with the best remaining touching / irregular colonies (never bubbles; very poor ones are skipped), marked LOW."><input type="checkbox" id="fillLow" style="width:auto"> Fill shortfall with lower-confidence colonies</div>
+        <div class="lbl">Agar depth (mm) — sets image scale; blank = default</div>
+        <input type="number" id="agarD" min="0" max="12" step="0.1" placeholder="e.g. 2.8 (petri) / 25 (SBS)">
+        <div class="lbl">Source Plate Name</div>
+        <input type="text" id="srcN" value="SourcePlate1">
+        <div class="lbl">Target Plate Name</div>
+        <input type="text" id="tgtN" value="TargetPlate1">
+        <div class="lbl">Target Format</div>
+        <select id="tgtF">
+          <option value="DWP_96">96-well DWP</option>
+          <option value="SBS_96">96-well SBS</option>
+          <option value="DWP_384">384-well DWP</option>
+        </select>
+        <div class="lbl">Colonies Needed</div>
+        <input type="number" id="tgtC" value="88" min="1" max="384">
+        <div class="lbl">Exclude Wells (A1, H11-H12)</div>
+        <input type="text" id="excI" placeholder="e.g. A1, B3-B6, H12">
+        <div class="etags" id="excT"></div>
+      </div>
+    </div>
+
+    <!-- Detect -->
+    <div class="col col-detect">
+      <div class="ch">Detection</div>
+      <div class="cb">
+        <div class="hint">Multi-scale detector trained on PIXL data. Colonies are scored on roundness, edge definition, isolation and contrast, <b>not on size</b>, so small-phenotype colonies are not penalised.</div>
+        <div class="lbl">Pick strategy</div>
+        <select id="strat">
+          <option value="best">Best-ranked (strict clean first)</option>
+          <option value="random">Random among clean colonies</option>
+        </select>
+        <div class="lbl" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="sizeN" style="width:auto"> Size-neutral ranking</div>
+        <div class="lbl" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="strictF" checked style="width:auto"> Strict-first (cleanest tier before relaxing)</div>
+        <div class="lbl">Min spacing between picks (mm)</div>
+        <div class="sr"><input type="range" id="slSep" min="0" max="4" value="1" step="0.1"><div class="sv" id="vSep">1.0</div></div>
+        <button class="btn bp" id="detBtn" disabled>🔍 Detect Colonies</button>
+        <div class="note ni" id="detNote" style="margin-top:6px">Upload an image first.</div>
+      </div>
+    </div>
+
+    <!-- Filter -->
+    <div class="col col-filter">
+      <div class="ch">Quality Filters <span class="bg a" id="passBg">—</span></div>
+      <div class="cb">
+        <div class="hint">Sliders filter the detected pool. The tool auto-picks the best N colonies that pass all filters. Use ADD mode to manually pick any missed ones.</div>
+        <div class="lbl">Min isolation from neighbors (mm)</div>
+        <div class="sr"><input type="range" id="slIso" min="0" max="8" value="0" step="0.1"><div class="sv" id="vIso">0.0</div></div>
+        <div class="lbl">Min circularity (0 = any, 1 = perfect circle)</div>
+        <div class="sr"><input type="range" id="slCir" min="0" max="0.95" value="0" step="0.05"><div class="sv" id="vCir">0.00</div></div>
+        <div class="lbl">Min size — radius (px)</div>
+        <div class="sr"><input type="range" id="slSzMin" min="1" max="40" value="1" step="1"><div class="sv" id="vSzMin">1</div></div>
+        <div class="lbl">Max size — radius (px)</div>
+        <div class="sr"><input type="range" id="slSzMax" min="10" max="80" value="50" step="1"><div class="sv" id="vSzMax">50</div></div>
+        <button class="btn bs" id="rstBtn" style="margin-top:5px">↺ Reset filters</button>
+      </div>
+    </div>
+
+    <!-- Stats + Export -->
+    <div class="col col-stats">
+      <div class="ch">Status</div>
+      <div class="cb">
+        <div class="sg">
+          <div class="sb"><div class="sv2" id="stS">0</div><div class="sl2">Selected</div></div>
+          <div class="sb"><div class="sv2" id="stT">88</div><div class="sl2">Target</div></div>
+          <div class="sb"><div class="sv2" id="stA">0</div><div class="sl2">Auto</div></div>
+          <div class="sb"><div class="sv2" id="stM">0</div><div class="sl2">Manual</div></div>
+        </div>
+        <div class="prog"><div class="pf" id="pf" style="width:0%"></div></div>
+        <div class="note ni" id="sNote">Upload an image to begin.</div>
+        <div class="note ni" id="secNote" style="display:none;font-size:9px"></div>
+        <button class="btn be" id="expC" disabled onclick="exportCSV()" style="margin-top:7px">⬇ Export Rearray CSV</button>
+        <button class="btn bs" id="expT" disabled onclick="exportTSV()">⬇ Export TSV Template</button>
+        <button class="btn bs" id="expI" disabled onclick="exportImage()">⬇ Export Annotated Image</button>
+        <button class="btn be" id="expAll" disabled onclick="exportAll()" style="margin-top:7px" title="Writes one folder with the rearray CSV, TSV template, annotated image, settings JSON, per-colony table, sector report and the original image. Chrome/Edge: choose where to create the folder. Other browsers: downloads it as a .zip.">📁 Export ALL (folder)</button>
+        <button class="btn bs" onclick="exportSettings()">⬇ Export Settings JSON</button>
+      </div>
+    </div>
+
+    <!-- Colony list -->
+    <div class="col">
+      <div class="ch">Selected <span class="bg" id="listBg">0</span></div>
+      <div class="cb" id="cList" style="padding:4px 6px">
+        <div style="text-align:center;padding:14px 0;font-family:var(--mono);font-size:9px;color:var(--txd)">No colonies selected.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="tip"></div>
+
+<script>
+/*
+ * colony_detect.js — scale-free colony candidate detection + ranking for PIXL plate images.
+ * Port of ref.py (reference implementation). No dependencies; runs in browsers and Node.
+ *
+ *   const out = ColonyDetect.analyze(rgba, W, H, {kind:'petri'|'sbs'|'sbs8', agarDepth: 3.3});
+ *   const picks = ColonyDetect.select(out.candidates, 8, {perSector:true, model: ColonyDetect.MODEL});
+ *
+ * Image assumptions: PIXL camera frame (1728x1720 px). If another size is supplied the calibration is rescaled.
+ */
+(function (root) {
+  'use strict';
+
+  // ------------------------------------------------------------------ calibration & geometry
+  const REF_W = 1728;
+  const CX = 849.5, CY = 865.5;                       // mm origin in pixels (reference frame)
+  const DEFAULT_SCALE = { petri: 10.83, sbs: 10.85, sbs8: 10.97 };
+  function scaleForAgar(agar) { return 0.0229 * agar + 10.7612; }
+
+  // Singer 'Shimadzu 8 Well' sectoring (Plate Sectors/Repository/8 sector split.xml): 8 rectangles, fractions of the 109 x 73 mm pickable
+  // area, XML order = row-major (S1..S4 top, S5..S8 bottom). These are the red dotted boxes the PIXL draws; verified on 217 human picks.
+  const SHIM8_FX = [[0, 0.16], [0.28, 0.44], [0.54, 0.70], [0.83, 0.99]], SHIM8_FY = [[0.03, 0.43], [0.60, 1.00]];
+  const SECTOR_COLS = SHIM8_FX.map(f => [-54.5 + 109 * f[0], -54.5 + 109 * f[1]]);
+  const SECTOR_ROWS = SHIM8_FY.map(f => [-36.5 + 73 * f[0], -36.5 + 73 * f[1]]);
+  const PETRI_R = 39.5, PETRI_CY = 0.3, SBS_X = 54.5, SBS_Y = 36.5;
+
+  // returns {inside, sector, edge} for a point in mm
+  function regionInfo(x, y, kind) {
+    if (kind === 'petri') {
+      const e = PETRI_R - Math.hypot(x, y - PETRI_CY);
+      return { inside: e >= 0, sector: e >= 0 ? 0 : -1, edge: e };
+    }
+    if (kind === 'sbs') {
+      const e = Math.min(SBS_X - Math.abs(x), SBS_Y - Math.abs(y));
+      return { inside: e >= 0, sector: e >= 0 ? 0 : -1, edge: e };
+    }
+    let sec = -1, edge = -1;
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) {
+      const x0 = SECTOR_COLS[c][0], x1 = SECTOR_COLS[c][1], y0 = SECTOR_ROWS[r][0], y1 = SECTOR_ROWS[r][1];
+      const e = Math.min(Math.min(x - x0, x1 - x), Math.min(y - y0, y1 - y));
+      if (e >= 0) { sec = r * 4 + c; edge = e; }
+    }
+    return { inside: sec >= 0, sector: sec, edge: edge };
+  }
+
+
+  // ------------------------------------------------------------------ sectoring layer (Singer PlateSectoring XML)
+  // A sectoring only decides which sector a position belongs to; edge distances still come from the physical plate.
+  // Fractions in the XML map onto the pickable area of the plate: SBS = 109 x 73 mm (|x|<=54.5, |y|<=36.5),
+  // petri = 78.5 mm square about the plate centre. (SBS mapping validated on 39 plates / 296 picks with 0 sector errors; petri on 2 MSM plates, ~90%.)
+  const SECT_BOX = {
+    sbs:   { x0: -SBS_X, x1: SBS_X, y0: -SBS_Y, y1: SBS_Y },
+    petri: { x0: -39.25, x1: 39.25, y0: -39.25, y1: 39.25 }   // fitted on MSM TDSI plates (78.5 mm square, ~90% agreement)
+  };
+  const FIXED_GRIDS = { 6: [3, 2], 12: [4, 3], 24: [6, 4], 48: [8, 6], 96: [12, 8], 384: [24, 16], 1536: [48, 32] };
+
+  function parseSectoring(text) {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    const root = doc.documentElement;
+    if (!root || root.nodeName !== 'PlateSectoring') throw new Error('Not a PlateSectoring XML file');
+    const num = (e, a) => parseFloat(e.getAttribute(a));
+    const def = { name: (root.getAttribute('Name') || 'Sectoring').trim(), description: root.getAttribute('Description') || '', compat: [], rects: [], circ: null, lines: [], fixed: null };
+    for (const c of root.getElementsByTagName('CompatabilityDefinition')) {
+      const t = (c.getAttribute('Type') || '').split('.').pop();
+      if (/SBS|Square/i.test(t)) def.compat.push('sbs'); else if (/Petri/i.test(t)) def.compat.push('petri');
+    }
+    def.compat = Array.from(new Set(def.compat));
+    const divs = root.getElementsByTagName('Divisions')[0];
+    for (const e of divs ? divs.children : []) {
+      if (e.nodeName === 'RectangularDivision') def.rects.push({ x: num(e, 'X'), y: num(e, 'Y'), w: num(e, 'Width'), h: num(e, 'Height') });
+      else if (e.nodeName === 'CircularDivision') def.circ = { cx: num(e, 'CenterX'), cy: num(e, 'CenterY'), r: num(e, 'Radius') };
+      else if (e.nodeName === 'FixedLayoutDivision') def.fixed = parseInt(e.getAttribute('Layout'), 10);
+      else if (e.nodeName === 'PolyLineDivision') {
+        const pts = Array.from(e.getElementsByTagName('Point')).map(p => [num(p, 'X'), num(p, 'Y')]);
+        if (pts.length >= 2) def.lines.push(pts);
+      }
+    }
+    return def;
+  }
+
+  // Build a label raster (0.25 mm cells) for a parsed sectoring on a base plate ('sbs' or 'petri').
+  function compileSectoring(def, base) {
+    base = base === 'petri' ? 'petri' : 'sbs';
+    const B = SECT_BOX[base], res = 0.25;
+    const bw = B.x1 - B.x0, bh = B.y1 - B.y0, GW = Math.ceil(bw / res), GH = Math.ceil(bh / res);
+    const f2g = (fx, fy) => [fx * bw / res, fy * bh / res];
+    const lab = new Int16Array(GW * GH).fill(-1);
+    const baseMask = new Uint8Array(GW * GH);
+    for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+      const mx = B.x0 + (x + 0.5) * res, my = B.y0 + (y + 0.5) * res;
+      baseMask[y * GW + x] = base === 'petri' ? (Math.hypot(mx, my - PETRI_CY) <= PETRI_R ? 1 : 0) : 1;
+    }
+    const inRect = (r, x, y) => { const g0 = f2g(r.x, r.y), g1 = f2g(r.x + r.w, r.y + r.h); return x + 0.5 >= g0[0] && x + 0.5 <= g1[0] && y + 0.5 >= g0[1] && y + 0.5 <= g1[1]; };
+    const polyFill = (pts, fn) => {                    // even-odd fill of a closed polygon given in fractions
+      const g = pts.map(p => f2g(p[0], p[1]));
+      for (let y = 0; y < GH; y++) {
+        const yy = y + 0.5, xs = [];
+        for (let i = 0; i < g.length - 1; i++) { const a = g[i], b = g[i + 1]; if ((a[1] <= yy && b[1] > yy) || (b[1] <= yy && a[1] > yy)) xs.push(a[0] + (yy - a[1]) / (b[1] - a[1]) * (b[0] - a[0])); }
+        xs.sort((p, q) => p - q);
+        for (let k = 0; k + 1 < xs.length; k += 2) for (let x = Math.ceil(xs[k] - 0.5); x <= Math.floor(xs[k + 1] - 0.5); x++) if (x >= 0 && x < GW) fn(x, y);
+      }
+    };
+    const closed = (l) => l.length >= 4 && Math.hypot(l[0][0] - l[l.length - 1][0], l[0][1] - l[l.length - 1][1]) < 1e-6;
+    let n = 0; const order = [];                       // order[k] = sector id for k-th created face (for sorting)
+    if (def.fixed) {
+      const g = FIXED_GRIDS[def.fixed] || [Math.ceil(Math.sqrt(def.fixed * 1.5)), Math.ceil(Math.sqrt(def.fixed / 1.5))];
+      for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) if (baseMask[y * GW + x]) lab[y * GW + x] = Math.min(g[1] - 1, Math.floor(y / GH * g[1])) * g[0] + Math.min(g[0] - 1, Math.floor(x / GW * g[0]));
+      n = g[0] * g[1];
+    } else if (def.rects.length > 1) {                 // each rectangle is a sector (XML order); closed polylines are extra polygon sectors
+      def.rects.forEach((r, i) => { for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) if (lab[y * GW + x] < 0 && baseMask[y * GW + x] && inRect(r, x, y)) lab[y * GW + x] = i; });
+      n = def.rects.length;
+      for (const l of def.lines) if (closed(l)) { const id = n++; polyFill(l, (x, y) => { if (baseMask[y * GW + x]) lab[y * GW + x] = id; }); }
+    } else {                                           // one boundary (rect / circle / closed polygon) cut by divider lines into faces
+      const region = new Uint8Array(GW * GH);
+      const dividers = def.lines.filter(l => !closed(l) || def.rects.length || def.circ);
+      const polys = def.lines.filter(l => closed(l) && !def.rects.length && !def.circ);
+      if (def.rects.length) { for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) if (inRect(def.rects[0], x, y)) region[y * GW + x] = 1; }
+      else if (def.circ) { const c = def.circ, cg = f2g(c.cx, c.cy), R = c.r * bw / res; for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) if (Math.hypot(x + 0.5 - cg[0], y + 0.5 - cg[1]) <= R) region[y * GW + x] = 1; }
+      else if (polys.length) polyFill(polys[0], (x, y) => { region[y * GW + x] = 1; });
+      else region.fill(1);
+      for (let i = 0; i < region.length; i++) if (!baseMask[i]) region[i] = 0;
+      const wall = new Uint8Array(GW * GH);
+      for (const l of dividers) for (let i = 0; i + 1 < l.length; i++) {
+        const a = f2g(l[i][0], l[i][1]), b = f2g(l[i + 1][0], l[i + 1][1]), L = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * 2));
+        for (let s = 0; s <= L; s++) { const px = Math.floor(a[0] + (b[0] - a[0]) * s / L), py = Math.floor(a[1] + (b[1] - a[1]) * s / L);
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = px + dx, yy = py + dy; if (xx >= 0 && xx < GW && yy >= 0 && yy < GH) wall[yy * GW + xx] = 1; } }
+      }
+      // connected components of region minus walls
+      const comp = new Int32Array(GW * GH).fill(-1); let nc = 0; const stack = [];
+      for (let s = 0; s < comp.length; s++) {
+        if (!region[s] || wall[s] || comp[s] >= 0) continue;
+        comp[s] = nc; stack.push(s);
+        while (stack.length) { const p = stack.pop(), px = p % GW, py = (p / GW) | 0;
+          if (px > 0) { const q = p - 1; if (region[q] && !wall[q] && comp[q] < 0) { comp[q] = nc; stack.push(q); } }
+          if (px < GW - 1) { const q = p + 1; if (region[q] && !wall[q] && comp[q] < 0) { comp[q] = nc; stack.push(q); } }
+          if (py > 0) { const q = p - GW; if (region[q] && !wall[q] && comp[q] < 0) { comp[q] = nc; stack.push(q); } }
+          if (py < GH - 1) { const q = p + GW; if (region[q] && !wall[q] && comp[q] < 0) { comp[q] = nc; stack.push(q); } } }
+        nc++;
+      }
+      // drop specks (< 0.5% of the region), then number the faces row-major by centroid
+      const cnt = new Float64Array(nc), sx = new Float64Array(nc), sy = new Float64Array(nc), y0 = new Float64Array(nc).fill(1e9), y1 = new Float64Array(nc).fill(-1e9);
+      for (let s = 0; s < comp.length; s++) { const c = comp[s]; if (c < 0) continue; const px = s % GW, py = (s / GW) | 0; cnt[c]++; sx[c] += px; sy[c] += py; if (py < y0[c]) y0[c] = py; if (py > y1[c]) y1[c] = py; }
+      const total = cnt.reduce((a, b) => a + b, 0), keep = [];
+      for (let c = 0; c < nc; c++) if (cnt[c] > 0.005 * total) keep.push(c);
+      const hs = keep.map(c => y1[c] - y0[c]).sort((a, b) => a - b), medH = hs.length ? hs[hs.length >> 1] : 1;
+      keep.sort((a, b) => sy[a] / cnt[a] - sy[b] / cnt[b]);
+      const rows = []; for (const c of keep) { const cy = sy[c] / cnt[c]; if (rows.length && cy - rows[rows.length - 1].cy0 <= 0.5 * medH) rows[rows.length - 1].items.push(c); else rows.push({ cy0: cy, items: [c] }); }
+      const map = new Int32Array(nc).fill(-1); let id = 0;
+      for (const r of rows) { r.items.sort((a, b) => sx[a] / cnt[a] - sx[b] / cnt[b]); for (const c of r.items) map[c] = id++; }
+      n = id;
+      for (let s = 0; s < comp.length; s++) if (comp[s] >= 0) lab[s] = map[comp[s]];
+      // walls and dropped specks take the label of the nearest face (few passes of 4-neighbour dilation)
+      for (let pass = 0; pass < 6; pass++) {
+        const nxt = lab.slice(); let changed = false;
+        for (let s = 0; s < lab.length; s++) if (lab[s] < 0 && region[s]) {
+          const px = s % GW, py = (s / GW) | 0; let v = -1;
+          if (px > 0 && lab[s - 1] >= 0) v = lab[s - 1]; else if (px < GW - 1 && lab[s + 1] >= 0) v = lab[s + 1]; else if (py > 0 && lab[s - GW] >= 0) v = lab[s - GW]; else if (py < GH - 1 && lab[s + GW] >= 0) v = lab[s + GW];
+          if (v >= 0) { nxt[s] = v; changed = true; }
+        }
+        lab.set(nxt); if (!changed) break;
+      }
+    }
+    const cen = Array.from({ length: n }, () => [0, 0, 0]);
+    for (let s = 0; s < lab.length; s++) if (lab[s] >= 0) { const c = cen[lab[s]]; c[0] += s % GW; c[1] += (s / GW) | 0; c[2]++; }
+    const centroids = cen.map(c => c[2] ? { x: B.x0 + (c[0] / c[2] + 0.5) * res, y: B.y0 + (c[1] / c[2] + 0.5) * res, cells: c[2] } : null);
+    return {
+      name: def.name, n, base, res, GW, GH, x0: B.x0, y0: B.y0, label: lab, centroids,
+      sectorAt: (x, y) => { const gx = Math.floor((x - B.x0) / res), gy = Math.floor((y - B.y0) / res); return (gx < 0 || gy < 0 || gx >= GW || gy >= GH) ? -1 : lab[gy * GW + gx]; }
+    };
+  }
+
+  // ------------------------------------------------------------------ small numeric helpers
+  function percentile(arr, q) {                       // numpy 'linear'
+    const n = arr.length; if (n === 0) return NaN;
+    const a = Float32Array.from(arr).sort();
+    const idx = (n - 1) * q / 100, lo = Math.floor(idx), hi = Math.ceil(idx);
+    return a[lo] + (a[hi] - a[lo]) * (idx - lo);
+  }
+  function median(arr) { return percentile(arr, 50); }
+
+  function reflect101(i, n) { if (i < 0) i = -i; if (i >= n) i = 2 * (n - 1) - i; if (i < 0) i = 0; return i; }
+
+  function gaussKernel(sigma) {
+    let ks = Math.round(sigma * 6 + 1) | 1; if (ks < 3) ks = 3;
+    const r = (ks - 1) >> 1, k = new Float32Array(ks); let s = 0;
+    for (let i = 0; i < ks; i++) { const d = i - r; k[i] = Math.exp(-d * d / (2 * sigma * sigma)); s += k[i]; }
+    for (let i = 0; i < ks; i++) k[i] /= s;
+    return { k, r };
+  }
+
+  function gaussianBlur(src, W, H, sigma) {
+    const { k, r } = gaussKernel(sigma);
+    const tmp = new Float32Array(W * H), out = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) {
+      const row = y * W;
+      for (let x = 0; x < W; x++) {
+        let s = 0;
+        if (x >= r && x < W - r) { for (let j = -r; j <= r; j++) s += k[j + r] * src[row + x + j]; }
+        else { for (let j = -r; j <= r; j++) s += k[j + r] * src[row + reflect101(x + j, W)]; }
+        tmp[row + x] = s;
+      }
+    }
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        let s = 0;
+        if (y >= r && y < H - r) { for (let j = -r; j <= r; j++) s += k[j + r] * tmp[(y + j) * W + x]; }
+        else { for (let j = -r; j <= r; j++) s += k[j + r] * tmp[reflect101(y + j, H) * W + x]; }
+        out[y * W + x] = s;
+      }
+    }
+    return out;
+  }
+
+  function laplacian(src, W, H) {                     // [0 1 0; 1 -4 1; 0 1 0], reflect101
+    const out = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) {
+      const ym = reflect101(y - 1, H) * W, y0 = y * W, yp = reflect101(y + 1, H) * W;
+      for (let x = 0; x < W; x++) {
+        const xm = reflect101(x - 1, W), xp = reflect101(x + 1, W);
+        out[y0 + x] = src[ym + x] + src[yp + x] + src[y0 + xm] + src[y0 + xp] - 4 * src[y0 + x];
+      }
+    }
+    return out;
+  }
+
+  function sobelMag(src, W, H) {                      // |grad| / 8 like cv2.Sobel(ksize=3)/8
+    const out = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) {
+      const ym = reflect101(y - 1, H) * W, y0 = y * W, yp = reflect101(y + 1, H) * W;
+      for (let x = 0; x < W; x++) {
+        const xm = reflect101(x - 1, W), xp = reflect101(x + 1, W);
+        const gx = (src[ym + xp] + 2 * src[y0 + xp] + src[yp + xp]) - (src[ym + xm] + 2 * src[y0 + xm] + src[yp + xm]);
+        const gy = (src[yp + xm] + 2 * src[yp + x] + src[yp + xp]) - (src[ym + xm] + 2 * src[ym + x] + src[ym + xp]);
+        out[y0 + x] = Math.hypot(gx, gy) / 8;
+      }
+    }
+    return out;
+  }
+
+  function downsample2(src, W, H) {
+    const w = W >> 1, h = H >> 1, out = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      out[y * w + x] = 0.25 * (src[2 * y * W + 2 * x] + src[2 * y * W + 2 * x + 1] + src[(2 * y + 1) * W + 2 * x] + src[(2 * y + 1) * W + 2 * x + 1]);
+    }
+    return { a: out, w, h };
+  }
+
+  function upsampleLinear(src, w, h, W, H) {          // cv2.resize INTER_LINEAR
+    const out = new Float32Array(W * H), sx = w / W, sy = h / H;
+    for (let y = 0; y < H; y++) {
+      let fy = (y + 0.5) * sy - 0.5; if (fy < 0) fy = 0; let y0 = Math.floor(fy); if (y0 > h - 1) y0 = h - 1; const y1 = Math.min(y0 + 1, h - 1), wy = fy - y0;
+      for (let x = 0; x < W; x++) {
+        let fx = (x + 0.5) * sx - 0.5; if (fx < 0) fx = 0; let x0 = Math.floor(fx); if (x0 > w - 1) x0 = w - 1; const x1 = Math.min(x0 + 1, w - 1), wx = fx - x0;
+        out[y * W + x] = (1 - wy) * ((1 - wx) * src[y0 * w + x0] + wx * src[y0 * w + x1]) + wy * ((1 - wx) * src[y1 * w + x0] + wx * src[y1 * w + x1]);
+      }
+    }
+    return out;
+  }
+
+  // ------------------------------------------------------------------ scale space seeds
+  const SIGMAS = []; for (let i = 0; i < 8; i++) SIGMAS.push(1.6 * Math.pow(2, i / 2));
+  const K_NOISE = 4.0, STRIDE = 3;
+  let K_BIG = 2.0, BIG_FROM = 3;   // seed threshold (in noise units) for large scales (sigma >= 6.4 px)
+
+  function logStack(gray, W, H) {
+    const out = [];
+    for (const s of SIGMAS) {
+      let L;
+      if (s >= 6.0) {
+        const d = downsample2(gray, W, H);
+        const g = gaussianBlur(d.a, d.w, d.h, s / 2);
+        const l = laplacian(g, d.w, d.h);
+        const f = -(s * s) / 4.0;
+        for (let i = 0; i < l.length; i++) l[i] *= f;
+        L = upsampleLinear(l, d.w, d.h, W, H);
+      } else {
+        const g = gaussianBlur(gray, W, H, s);
+        L = laplacian(g, W, H);
+        const f = -(s * s);
+        for (let i = 0; i < L.length; i++) L[i] *= f;
+      }
+      out.push(L);
+    }
+    return out;
+  }
+
+  // simple grid hash for radius queries
+  function makeGrid(xs, ys, cell) {
+    const m = new Map();
+    for (let i = 0; i < xs.length; i++) {
+      const key = Math.floor(xs[i] / cell) * 100003 + Math.floor(ys[i] / cell);
+      let a = m.get(key); if (!a) { a = []; m.set(key, a); } a.push(i);
+    }
+    return { m, cell, xs, ys };
+  }
+  function gridQuery(g, x, y, r) {
+    const out = [], c = g.cell, x0 = Math.floor((x - r) / c), x1 = Math.floor((x + r) / c), y0 = Math.floor((y - r) / c), y1 = Math.floor((y + r) / c);
+    const r2 = r * r;
+    for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
+      const a = g.m.get(cx * 100003 + cy); if (!a) continue;
+      for (const i of a) { const dx = g.xs[i] - x, dy = g.ys[i] - y; if (dx * dx + dy * dy <= r2) out.push(i); }
+    }
+    return out;
+  }
+
+  function findSeeds(gray, W, H, mask) {
+    const st = logStack(gray, W, H);
+    const nS = SIGMAS.length;
+    // statistics on a regular subsample inside the region
+    const thr = new Float32Array(nS), noise = new Float32Array(nS);
+    for (let k = 0; k < nS; k++) {
+      const v = [];
+      for (let y = 0; y < H; y += STRIDE) for (let x = 0; x < W; x += STRIDE) if (mask[y * W + x]) v.push(st[k][y * W + x]);
+      const med = median(v), lo = percentile(v, 15.87);
+      noise[k] = Math.max(med - lo, 1e-3); thr[k] = med + (k >= BIG_FROM ? K_BIG : K_NOISE) * noise[k];
+    }
+    const seeds = [];
+    for (let k = 0; k < nS; k++) {
+      const a = st[k], am = k > 0 ? st[k - 1] : st[k], ap = k < nS - 1 ? st[k + 1] : st[k];
+      for (let y = 0; y < H; y++) {
+        const y0 = y * W, ym = reflect101(y - 1, H) * W, yp = reflect101(y + 1, H) * W;
+        for (let x = 0; x < W; x++) {
+          const i = y0 + x; if (!mask[i]) continue;
+          const v = a[i]; if (!(v > thr[k])) continue;
+          const xm = reflect101(x - 1, W), xp = reflect101(x + 1, W);
+          let ok = true;
+          const rows = [ym, y0, yp], cols = [xm, x, xp];
+          for (const arr of [a, am, ap]) {
+            for (const rr of rows) { for (const cc of cols) { if (arr[rr + cc] > v) { ok = false; break; } } if (!ok) break; }
+            if (!ok) break;
+          }
+          if (ok) seeds.push([x, y, SIGMAS[k] * 1.4142, v / noise[k]]);
+        }
+      }
+    }
+    if (!seeds.length) return [];
+    seeds.sort((p, q) => (q[2] - p[2]) || (q[3] - p[3]));
+    const n = seeds.length, alive = new Uint8Array(n).fill(1);
+    const grid = makeGrid(seeds.map(s => s[0]), seeds.map(s => s[1]), 40);
+    for (let i = 0; i < n; i++) {
+      if (!alive[i]) continue;
+      const rr = seeds[i][2];
+      for (const j of gridQuery(grid, seeds[i][0], seeds[i][1], rr * 1.1)) {
+        if (j <= i || !alive[j]) continue;
+        if (seeds[j][2] < seeds[i][2] * 0.999) alive[j] = 0;
+        else if (Math.hypot(seeds[i][0] - seeds[j][0], seeds[i][1] - seeds[j][1]) < 0.7 * rr) alive[j] = 0;
+      }
+    }
+    return seeds.filter((_, i) => alive[i]);
+  }
+
+  // ------------------------------------------------------------------ exact Euclidean distance transform (Felzenszwalb)
+  function edt1d(f, n, d, v, z) {
+    const INF = 1e20;
+    let k = 0; v[0] = 0; z[0] = -INF; z[1] = INF;
+    for (let q = 1; q < n; q++) {
+      let p = v[k], s = ((f[q] + q * q) - (f[p] + p * p)) / (2 * q - 2 * p);
+      while (s <= z[k]) { k--; p = v[k]; s = ((f[q] + q * q) - (f[p] + p * p)) / (2 * q - 2 * p); }
+      k++; v[k] = q; z[k] = s; z[k + 1] = INF;
+    }
+    k = 0;
+    for (let q = 0; q < n; q++) { while (z[k + 1] < q) k++; const p = v[k]; d[q] = (q - p) * (q - p) + f[p]; }
+  }
+  // distance of every pixel to the nearest 'on' pixel (on = 1). Returns Float32Array of distances.
+  function edtToOn(on, w, h) {
+    const INF = 1e12, g = new Float32Array(w * h);
+    const n = Math.max(w, h), f = new Float64Array(n), d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1);
+    for (let i = 0; i < w * h; i++) g[i] = on[i] ? 0 : INF;
+    for (let x = 0; x < w; x++) { for (let y = 0; y < h; y++) f[y] = g[y * w + x]; edt1d(f, h, d, v, z); for (let y = 0; y < h; y++) g[y * w + x] = d[y]; }
+    for (let y = 0; y < h; y++) { for (let x = 0; x < w; x++) f[x] = g[y * w + x]; edt1d(f, w, d, v, z); for (let x = 0; x < w; x++) g[y * w + x] = d[x]; }
+    for (let i = 0; i < w * h; i++) g[i] = Math.sqrt(g[i]);
+    return g;
+  }
+
+  const GLINT_RATIO = 2.6, GLINT_CENTER_RATIO = 1.35;
+  const HULL_TOL = 0.5;   // cv2.fillConvexPoly also paints the hull outline
+  // ------------------------------------------------------------------ per-seed analysis
+  function analyze(rgba, W, H, opts) {
+    opts = opts || {};
+    const kind = opts.kind || 'petri';
+    if (opts.kBig != null) K_BIG = opts.kBig; if (opts.bigFrom != null) BIG_FROM = opts.bigFrom;
+    const imgScale = W / REF_W;
+    let scale = opts.scale || (opts.agarDepth != null && isFinite(opts.agarDepth) ? scaleForAgar(opts.agarDepth) : DEFAULT_SCALE[kind]);
+    scale *= imgScale;
+    const cx = CX * imgScale, cy = CY * imgScale;
+    const px2mm = (px, py) => [(px - cx) / scale, (py - cy) / scale];
+    // sector layer: opts.sectoring = compiled sectoring | null (no sectoring => sector 0) | undefined (legacy: physical 8-well boxes)
+    const sectorOf = (x, y, ri) => opts.sectoring ? opts.sectoring.sectorAt(x, y) : (opts.sectoring === null ? 0 : ri.sector);
+
+    // luminance
+    const gray = new Float32Array(W * H);
+    for (let i = 0, j = 0; i < W * H; i++, j += 4) gray[i] = 0.299 * rgba[j] + 0.587 * rgba[j + 1] + 0.114 * rgba[j + 2];
+
+    // region mask + bounding box of the region (crop for speed)
+    const mask = new Uint8Array(W * H);
+    let bx0 = W, bx1 = 0, by0 = H, by1 = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const m = px2mm(x, y), ri = regionInfo(m[0], m[1], kind);
+      if (ri.inside) { mask[y * W + x] = 1; if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; }
+    }
+    if (bx1 < bx0) return { candidates: [], scale, noise: 0 };
+    const MARGIN = 64;
+    let cx0 = Math.max(0, bx0 - MARGIN), cy0 = Math.max(0, by0 - MARGIN), cx1 = Math.min(W, bx1 + MARGIN + 1), cy1 = Math.min(H, by1 + MARGIN + 1);
+    let cw = cx1 - cx0, ch = cy1 - cy0; cw -= cw % 2; ch -= ch % 2; cx1 = cx0 + cw; cy1 = cy0 + ch;
+    const g2 = new Float32Array(cw * ch), m2 = new Uint8Array(cw * ch);
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) { g2[y * cw + x] = gray[(y + cy0) * W + x + cx0]; m2[y * cw + x] = mask[(y + cy0) * W + x + cx0]; }
+
+    const gs = gaussianBlur(g2, cw, ch, 1.0);
+    const gs6 = gaussianBlur(gs, cw, ch, 6.0);
+    const hv = [];
+    for (let y = 0; y < ch; y += STRIDE) for (let x = 0; x < cw; x += STRIDE) if (m2[y * cw + x]) hv.push(gs[y * cw + x] - gs6[y * cw + x]);
+    const hmed = median(hv); const dev = hv.map(v => Math.abs(v - hmed));
+    const noisePx = 1.4826 * median(dev) + 1e-3;
+
+    const seeds = findSeeds(g2, cw, ch, m2);
+    const gm = sobelMag(gs, cw, ch);
+    const nSeed = seeds.length;
+    const sgrid = makeGrid(seeds.map(s => s[0]), seeds.map(s => s[1]), 40);
+    const rows = [];
+
+    for (let i = 0; i < nSeed; i++) {
+      const sx = seeds[i][0], sy = seeds[i][1], r0 = seeds[i][2];
+      const win = Math.floor(2.8 * r0) + 4;
+      const x0 = Math.max(0, sx - win), x1 = Math.min(cw, sx + win + 1), y0 = Math.max(0, sy - win), y1 = Math.min(ch, sy + win + 1);
+      const w = x1 - x0, h = y1 - y0, N = w * h;
+      const patch = new Float32Array(N), di = new Float32Array(N), cell = new Uint8Array(N).fill(1), wi = new Float32Array(N);
+      for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+        const p = yy * w + xx; patch[p] = gs[(yy + y0) * cw + xx + x0];
+        const d = Math.hypot(xx + x0 - sx, yy + y0 - sy); di[p] = d; wi[p] = d * d - r0 * r0;
+      }
+      for (const j of gridQuery(sgrid, sx, sy, win * 1.6 + 30)) {
+        if (j === i) continue;
+        const jx = seeds[j][0], jy = seeds[j][1], jr = seeds[j][2], jj = jr * jr;
+        for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+          const p = yy * w + xx; if (!cell[p]) continue;
+          const dx = xx + x0 - jx, dy = yy + y0 - jy;
+          if (!(wi[p] <= dx * dx + dy * dy - jj)) cell[p] = 0;
+        }
+      }
+      // background & peak
+      const bgAll = [], bgCell = [], core = [];
+      const farLo = 1.8 * r0, farHi = 2.8 * r0 + 3, coreR = Math.max(0.5 * r0, 1.2);
+      for (let p = 0; p < N; p++) {
+        const d = di[p];
+        if (d > farLo && d < farHi) { bgAll.push(patch[p]); if (cell[p]) bgCell.push(patch[p]); }
+        if (d <= coreR) core.push(patch[p]);
+      }
+      const bgv = bgCell.length > 10 ? bgCell : bgAll;
+      const bg = bgv.length ? percentile(bgv, 25) : percentile(patch, 10);
+      let pk = percentile(core, 75), dl = pk - bg;
+      if (!isFinite(dl) || dl < 2.0 * noisePx) continue;
+      let lvl = bg + 0.5 * dl;
+      const mArr = new Uint8Array(N), mc = new Uint8Array(N);
+      const maxD = 2.4 * r0 + 2;
+      // specular-glint guard: a tiny very bright highlight inflates the peak, so half-max only covers the highlight and the
+      // centre lands on it instead of the colony body. Compare the peak with the typical level of everything clearly above
+      // background; if the peak is far above that body level, threshold from the body level instead.
+      let dlBody = dl, dlTop = dl;   // dlTop: contrast of the 80th-percentile body pixel (peak vs body ratio flags a glint)
+      {
+        const t0 = bg + Math.max(5 * noisePx, 0.2 * dl), body = [];
+        for (let p = 0; p < N; p++) if (di[p] <= maxD && cell[p] && patch[p] > t0) body.push(patch[p]);
+        let glint = false, dl2 = dl, dl80 = dl;
+        if (body.length >= 6) { dl80 = percentile(body, 80) - bg; dl2 = percentile(body, 50) - bg; glint = dl2 > 2.0 * noisePx && dl > GLINT_RATIO * dl2; }
+        if (dl2 > 2.0 * noisePx && dl2 < dl) dlBody = dl2;
+        dlTop = Math.max(dl80, 1e-6);
+        if (glint) { dl = dl2; pk = bg + dl2; lvl = bg + 0.5 * dl2; }
+      }
+      for (let p = 0; p < N; p++) { if (patch[p] > lvl && di[p] <= maxD) { mArr[p] = 1; if (cell[p]) mc[p] = 1; } }
+      // 4-connected labelling
+      const lab = new Int32Array(N); let nl = 0; const stack = new Int32Array(N);
+      for (let p = 0; p < N; p++) {
+        if (!mc[p] || lab[p]) continue;
+        nl++; let sp = 0; stack[sp++] = p; lab[p] = nl;
+        while (sp) {
+          const q = stack[--sp], qx = q % w, qy = (q / w) | 0;
+          if (qx > 0 && mc[q - 1] && !lab[q - 1]) { lab[q - 1] = nl; stack[sp++] = q - 1; }
+          if (qx < w - 1 && mc[q + 1] && !lab[q + 1]) { lab[q + 1] = nl; stack[sp++] = q + 1; }
+          if (qy > 0 && mc[q - w] && !lab[q - w]) { lab[q - w] = nl; stack[sp++] = q - w; }
+          if (qy < h - 1 && mc[q + w] && !lab[q + w]) { lab[q + w] = nl; stack[sp++] = q + w; }
+        }
+      }
+      let cyl = Math.round(sy - y0), cxl = Math.round(sx - x0);
+      cyl = Math.min(Math.max(cyl, 0), h - 1); cxl = Math.min(Math.max(cxl, 0), w - 1);
+      let l0 = lab[cyl * w + cxl];
+      if (l0 === 0) {
+        if (nl === 0) continue;
+        let best = Infinity;
+        for (let p = 0; p < N; p++) if (lab[p]) { const dx = (p % w) - cxl, dy = ((p / w) | 0) - cyl, d2 = dx * dx + dy * dy; if (d2 < best) { best = d2; l0 = lab[p]; } }
+      }
+      let comp = new Uint8Array(N); for (let p = 0; p < N; p++) comp[p] = lab[p] === l0 ? 1 : 0;
+      // fill holes (background not 4-connected to the window border)
+      {
+        const reach = new Uint8Array(N); let sp = 0;
+        const push = (p) => { if (!comp[p] && !reach[p]) { reach[p] = 1; stack[sp++] = p; } };
+        for (let xx = 0; xx < w; xx++) { push(xx); push((h - 1) * w + xx); }
+        for (let yy = 0; yy < h; yy++) { push(yy * w); push(yy * w + w - 1); }
+        while (sp) {
+          const q = stack[--sp], qx = q % w, qy = (q / w) | 0;
+          if (qx > 0) push(q - 1); if (qx < w - 1) push(q + 1); if (qy > 0) push(q - w); if (qy < h - 1) push(q + w);
+        }
+        for (let p = 0; p < N; p++) if (!comp[p] && !reach[p]) comp[p] = 1;
+      }
+      let area = 0, sxm = 0, sym = 0;
+      for (let p = 0; p < N; p++) if (comp[p]) { area++; sxm += p % w; sym += (p / w) | 0; }
+      if (area < 6) continue;
+      const mx = sxm / area, my = sym / area;
+      let cxx = 0, cyy = 0, cxy = 0;
+      for (let p = 0; p < N; p++) if (comp[p]) { const dx = (p % w) - mx, dy = ((p / w) | 0) - my; cxx += dx * dx; cyy += dy * dy; cxy += dx * dy; }
+      cxx /= (area - 1); cyy /= (area - 1); cxy /= (area - 1);
+      const tr = cxx + cyy, det = cxx * cyy - cxy * cxy, disc = Math.sqrt(Math.max(tr * tr / 4 - det, 0));
+      const e1 = tr / 2 + disc, e2 = Math.max(tr / 2 - disc, 1e-6);
+      const axisRatio = Math.sqrt(e1 / e2);
+      const req = Math.sqrt(area / Math.PI);
+      // boundary pixels (4-neighbour outside) -> radial cv
+      let nb = 0, sr = 0, sr2 = 0;
+      const isIn = (xx, yy) => xx >= 0 && xx < w && yy >= 0 && yy < h && comp[yy * w + xx] === 1;
+      for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+        if (!comp[yy * w + xx]) continue;
+        if (!isIn(xx - 1, yy) || !isIn(xx + 1, yy) || !isIn(xx, yy - 1) || !isIn(xx, yy + 1)) {
+          const d = Math.hypot(xx - mx, yy - my); nb++; sr += d; sr2 += d * d;
+        }
+      }
+      const rmean = sr / nb, rstd = Math.sqrt(Math.max(sr2 / nb - rmean * rmean, 0));
+      const radialCv = rstd / (rmean + 1e-6);
+      // 3x3 dilate / erode (outside = 0)
+      const dil = new Uint8Array(N), ero = new Uint8Array(N);
+      for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+        let any = 0, all = 1;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const ax = xx + dx, ay = yy + dy;
+          const v = (ax >= 0 && ax < w && ay >= 0 && ay < h) ? comp[ay * w + ax] : 0;
+          if (v) any = 1; else all = 0;
+        }
+        dil[yy * w + xx] = any; ero[yy * w + xx] = all;
+      }
+      let ringN = 0, cutN = 0, gSum = 0, gN = 0;
+      for (let p = 0; p < N; p++) {
+        if (dil[p] && !comp[p]) { ringN++; if (mArr[p] && !cell[p]) cutN++; }
+        if (dil[p] && !ero[p]) { const yy = (p / w) | 0, xx = p % w; gSum += gm[(yy + y0) * cw + xx + x0]; gN++; }
+      }
+      const touch = cutN / Math.max(ringN, 1);
+      const edgeW = dl / (gSum / Math.max(gN, 1) + 1e-3) / Math.max(req, 1.0);
+      // ring brightness just outside the colony
+      const dist = edtToOn(comp, w, h);
+      const rgv = []; const rLo = 0.25 * req + 1, rHi = 0.9 * req + 3;
+      for (let p = 0; p < N; p++) {
+        if (dist[p] > rLo && dist[p] < rHi) { const yy = (p / w) | 0, xx = p % w; if (m2[(yy + y0) * cw + xx + x0]) rgv.push(patch[p]); }
+      }
+      const ringMax = rgv.length > 8 ? (percentile(rgv, 95) - bg) / dl : 0.0;
+      // artifact / double-colony descriptors
+      let solidity = 1, inscr = 1, sat = 0, fillR = 1, clutter = 0, halo = 0;
+      {
+        const px = [], py = [];
+        for (let p = 0; p < N; p++) if (comp[p]) { px.push(p % w); py.push((p / w) | 0); }
+        const idx = px.map((_, k) => k).sort((a, b) => px[a] - px[b] || py[a] - py[b]);
+        const cross = (o, a, b) => (px[a] - px[o]) * (py[b] - py[o]) - (py[a] - py[o]) * (px[b] - px[o]);
+        const lower = [], upper = [];
+        for (const k of idx) { while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], k) <= 0) lower.pop(); lower.push(k); }
+        for (let t = idx.length - 1; t >= 0; t--) { const k = idx[t]; while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], k) <= 0) upper.pop(); upper.push(k); }
+        const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
+        let hullN = 0;
+        if (hull.length >= 3) {
+          for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+            let ok = true;
+            for (let q = 0; q < hull.length && ok; q++) { const a = hull[q], b = hull[(q + 1) % hull.length]; const el = Math.hypot(px[b] - px[a], py[b] - py[a]) || 1; if (((px[b] - px[a]) * (yy - py[a]) - (py[b] - py[a]) * (xx - px[a])) / el < -HULL_TOL) ok = false; }
+            if (ok) hullN++;
+          }
+        } else hullN = area;
+        solidity = area / Math.max(hullN, area);
+        const inv = new Uint8Array(N); for (let p = 0; p < N; p++) inv[p] = comp[p] ? 0 : 1;
+        const din = edtToOn(inv, w, h); let dmax = 0; for (let p = 0; p < N; p++) if (comp[p] && din[p] > dmax) dmax = din[p];
+        inscr = dmax / Math.max(req, 1.0);
+        let ns = 0; for (let p = 0; p < N; p++) if (comp[p]) { const yy = (p / w) | 0, xx = p % w; if (g2[(yy + y0) * cw + xx + x0] >= 240) ns++; }
+        sat = ns / area;
+        let fs = 0, fn = 0; const fr = 0.5 * Math.max(req, 1.5);
+        for (let p = 0; p < N; p++) if (di[p] <= fr) { fs += patch[p]; fn++; }
+        fillR = (fs / Math.max(fn, 1) - bg) / dl;
+        clutter = bgv.length > 10 ? (percentile(bgv, 90) - percentile(bgv, 10)) / noisePx : 0;
+        let hn = 0, hg = 0;
+        for (let p = 0; p < N; p++) if (dist[p] > 1.0 && dist[p] < 2.5 * req + 4) { const yy = (p / w) | 0, xx = p % w; if (m2[(yy + y0) * cw + xx + x0] && cell[p]) { hn++; if (gm[(yy + y0) * cw + xx + x0] > 2 * noisePx) hg++; } }
+        halo = hn > 10 ? hg / hn : 0;
+      }
+      // centre of the colony = centroid of the body-level region around the seed (not of the half-max-of-peak mask, which a specular
+      // glint drags towards the highlight). Shape features above still use the original mask.
+      let ccx = mx, ccy = my;
+      if (dl > GLINT_CENTER_RATIO * dlTop) {
+        const cl = bg + 0.5 * dlBody, cm = new Uint8Array(N); let sp = 0;
+        for (let p = 0; p < N; p++) if (patch[p] > cl && di[p] <= maxD && cell[p]) cm[p] = 1;
+        let s0 = cyl * w + cxl;
+        if (!cm[s0]) { let bd = Infinity; for (let p = 0; p < N; p++) if (cm[p]) { const dx = (p % w) - cxl, dy = ((p / w) | 0) - cyl, d2 = dx * dx + dy * dy; if (d2 < bd) { bd = d2; s0 = p; } } if (!isFinite(bd)) s0 = -1; }
+        if (s0 >= 0) {
+          const seen = new Uint8Array(N); let n2 = 0, sx2 = 0, sy2 = 0; stack[sp++] = s0; seen[s0] = 1;
+          while (sp) {
+            const q = stack[--sp], qx = q % w, qy = (q / w) | 0; n2++; sx2 += qx; sy2 += qy;
+            if (qx > 0 && cm[q - 1] && !seen[q - 1]) { seen[q - 1] = 1; stack[sp++] = q - 1; }
+            if (qx < w - 1 && cm[q + 1] && !seen[q + 1]) { seen[q + 1] = 1; stack[sp++] = q + 1; }
+            if (qy > 0 && cm[q - w] && !seen[q - w]) { seen[q - w] = 1; stack[sp++] = q - w; }
+            if (qy < h - 1 && cm[q + w] && !seen[q + w]) { seen[q + w] = 1; stack[sp++] = q + w; }
+          }
+          if (n2 >= 6 && n2 <= 10 * area + 40) { ccx = sx2 / n2; ccy = sy2 / n2; }
+        }
+      }
+      const gx = ccx + x0 + cx0, gy = ccy + y0 + cy0;               // full-image pixel coordinates
+      const mm = px2mm(gx, gy), ri = regionInfo(mm[0], mm[1], kind);
+      rows.push({ x: gx, y: gy, r_seed: r0, r_px: req, r_mm: req / scale, snr: dl / noisePx, axis_ratio: axisRatio,
+        radial_cv: radialCv, edge_w: edgeW, touch: touch, ring_max: ringMax, solidity: solidity, inscr: inscr, sat: sat, fill: fillR, clutter: clutter, halo: halo, edge_mm: ri.edge, sector: sectorOf(mm[0], mm[1], ri), x_mm: mm[0], y_mm: mm[1] });
+    }
+    // neighbour context
+    const xs = rows.map(r => r.x), ys = rows.map(r => r.y);
+    const grid = makeGrid(xs, ys, 40);
+    for (let k = 0; k < rows.length; k++) {
+      const r = rows[k];
+      let g = 50 * scale;
+      for (const j of gridQuery(grid, r.x, r.y, r.r_px * 3 + 60)) {
+        if (j === k) continue;
+        const gap = Math.hypot(r.x - rows[j].x, r.y - rows[j].y) - r.r_px - rows[j].r_px;
+        if (gap < g) g = gap;
+      }
+      r.gap_mm = g / scale;
+      let dens = 0; for (const j of gridQuery(grid, r.x, r.y, 3.0 * scale)) if (j !== k) dens++;
+      r.dens3 = dens;
+    }
+    return { candidates: rows, scale, noise: noisePx, kind };
+  }
+
+  // ------------------------------------------------------------------ scoring & selection
+  const EDGE_CLIP = 4.0;
+  const clip = (v, a, b) => Math.min(Math.max(v, a), b);
+  function featureVector(c) {
+    return {
+      radial_cv: clipR(c.radial_cv, 0, 0.6), axis_ratio: clipR(c.axis_ratio, 1, 3), edge_w: clipR(c.edge_w, 0, 3),
+      ring_max: clipR(c.ring_max, -0.3, 1.5), gap_mm: clipR(c.gap_mm, -0.5, 3), dens3: clipR(c.dens3, 0, 30),
+      edge_mm: clipR(c.edge_mm, 0, EDGE_CLIP), snr: Math.log1p(clipR(c.snr, 0, 120)), touch: clipR(c.touch, 0, 1),
+      solidity: clipR(c.solidity, 0.5, 1), inscr: clipR(c.inscr, 0.4, 1.05), fill: clipR(c.fill, 0, 1.1), sat: clipR(c.sat, 0, 0.5),
+      clutter: Math.log1p(clipR(c.clutter, 0, 60)), halo: clipR(c.halo, 0, 0.7)
+    };
+  }
+  function score(c, model) {
+    const f = featureVector(c); let s = model.b;
+    for (let i = 0; i < model.features.length; i++) s += model.w[i] * f[model.features[i]];
+    return s;
+  }
+
+  // ------------------------------------------------------------------ "is this a real colony?" model (trained on curated omnitray picks vs junk in empty sectors)
+  const REAL_MODEL = {"features": ["radial_cv", "axis_ratio", "edge_w", "ring_max", "touch", "solidity", "inscr", "fill", "sat", "clutter", "halo", "lsnr", "lr", "gapc", "dens", "edge_mm"], "w": [-7.5541015538556175, -0.59887765516387, -1.6170540408517282, 0.3105603354255493, -4.151849787949336, 6.04888145500508, 6.180937570918918, 5.497938870123086, -26.823516894026717, -0.7499364911402016, -2.548623588832721, 2.8196449302744075, 1.8842610291981574, -0.08845211554608032, 0.4330102458278428, 0.4109233460283216], "b": -22.80555244659626};
+  const clipR = (v, a, b) => Math.min(b, Math.max(a, v));
+  function realFeatures(c) {
+    return { radial_cv: clipR(c.radial_cv, 0, .6), axis_ratio: clipR(c.axis_ratio, 1, 3), edge_w: clipR(c.edge_w, 0, 3), ring_max: clipR(c.ring_max, 0, 2), touch: clipR(c.touch, 0, 1),
+      solidity: clipR(c.solidity, .5, 1), inscr: clipR(c.inscr, .4, 1.05), fill: clipR(c.fill, 0, 1.1), sat: clipR(c.sat, 0, .5), clutter: Math.log1p(clipR(c.clutter, 0, 60)), halo: clipR(c.halo, 0, .7),
+      lsnr: Math.log1p(clipR(c.snr, 0, 300)), lr: Math.log(clipR(c.r_px, 1.5, 40)), gapc: clipR(c.gap_mm, -.5, 2.5), dens: Math.log1p(c.dens3), edge_mm: clipR(c.edge_mm, 0, 6) };
+  }
+  function pReal(c) {
+    const f = realFeatures(c); let z = REAL_MODEL.b;
+    for (let i = 0; i < REAL_MODEL.features.length; i++) z += REAL_MODEL.w[i] * f[REAL_MODEL.features[i]];
+    return 1 / (1 + Math.exp(-z));
+  }
+  // bubbles / glare / reflections are never pickable
+  function isArtifact(c) { return c.halo > 0.45 || c.sat > 0.05 || c.fill < 0.75 || c.solidity < 0.80 || (c.clutter > 15 && c.ring_max > 0.6) || (c.ring_max > 1.0 && c.touch > 0.25) || (c.ring_max > 0.8 && c.touch > 0.2 && c.clutter > 8); }
+  function tierOf(c) {
+    if (isArtifact(c)) return 4;
+    if (c.touch <= 0.02 && c.radial_cv <= 0.20 && c.axis_ratio <= 1.5 && c.snr >= 5 && c.edge_mm >= 1.0 && c.gap_mm >= 0.15 && c.inscr >= 0.85 && c.solidity >= 0.93) return 1;
+    if (c.touch <= 0.15 && c.radial_cv <= 0.30 && c.axis_ratio <= 1.9 && c.snr >= 4 && c.edge_mm >= 0.8 && c.inscr >= 0.78) return 2;
+    if (c.radial_cv <= 0.45 && c.snr >= 3 && c.edge_mm >= 0.5) return 3;
+    return 4;
+  }
+
+  // Adds score/tier/too_small to each candidate (in place) and returns the array.
+  function rank(cands, opts) {
+    opts = opts || {};
+    const model = opts.model || API.MODEL;
+    const sizeFloorFrac = opts.sizeFloorFrac != null ? opts.sizeFloorFrac : 0.35, absFloor = opts.absFloorMm != null ? opts.absFloorMm : 0.10;
+    for (const c of cands) { c.score = score(c, model); c.tier = tierOf(c); c.preal = pReal(c); }
+    {
+      const g = new Map(); for (const c of cands) if (c.preal >= 0.5 && c.tier <= 2) { if (!g.has(c.sector)) g.set(c.sector, []); g.get(c.sector).push(c.r_mm); }
+      const ref = new Map(); for (const [k, v] of g) if (v.length >= 3) ref.set(k, median(v));
+      for (const c of cands) c.r_real_ref = ref.has(c.sector) ? ref.get(c.sector) : null;
+    }
+    const g1 = new Map(), g2 = new Map();
+    for (const c of cands) {
+      if (c.tier === 1) { if (!g1.has(c.sector)) g1.set(c.sector, []); g1.get(c.sector).push(c.r_mm); }
+      if (c.tier <= 2) { if (!g2.has(c.sector)) g2.set(c.sector, []); g2.get(c.sector).push(c.r_mm); }
+    }
+    const all = median(cands.map(c => c.r_mm));
+    const ref1 = new Map(), ref2 = new Map(); for (const [s, v] of g1) ref1.set(s, median(v)); for (const [s, v] of g2) ref2.set(s, median(v));
+    for (const c of cands) {
+      c.r_ref = ref1.has(c.sector) ? ref1.get(c.sector) : (ref2.has(c.sector) ? ref2.get(c.sector) : all);
+      c.too_small = c.r_mm < Math.max(absFloor, sizeFloorFrac * c.r_ref);
+      if (c.too_small && c.tier < 4) c.tier = 3;
+    }
+    if (opts.sizeNeutral) {                                       // remove the score~log(size) trend inside each sector
+      const bySec = new Map(); for (const c of cands) { if (!bySec.has(c.sector)) bySec.set(c.sector, []); bySec.get(c.sector).push(c); }
+      for (const [, g] of bySec) {
+        const e = g.filter(c => c.tier <= 2); if (e.length < 8) continue;
+        const lr = e.map(c => Math.log(Math.max(c.r_mm, 0.05))), ms = e.reduce((a, c) => a + c.score, 0) / e.length, ml = lr.reduce((a, b) => a + b, 0) / e.length;
+        let num = 0, den = 0; e.forEach((c, i) => { num += (lr[i] - ml) * (c.score - ms); den += (lr[i] - ml) ** 2; });
+        const beta = num / Math.max(den, 1e-9);
+        for (const c of g) c.score -= beta * (Math.log(Math.max(c.r_mm, 0.05)) - ml);
+      }
+    }
+    return cands;
+  }
+
+  // select(cands, n, opts)
+  //  Global mode (default): n best colonies over the whole plate.
+  //  Sector mode (opts.perSector): per-sector target perSectorK (number, or array indexed by sector; default ceil(n/nSectors)).
+  //   opts.sectors  : array of enabled sector ids (default all).
+  //   opts.fillLow  : when a sector cannot reach its target with colonies scoring >= minScore, top it up with the best
+  //                   remaining tier<=3 colonies, flagged c.lowConf = true.
+  // Returns chosen candidates, ordered by sector then rank.
+  const MIN_REAL = 0.9, SATELLITE_W = 3.0, DENSE_REAL = 0.95;
+  const ALIVE_POP = 4, ALIVE_REAL = 0.6, ALIVE_SCORE = -3.6, CROWD_N = 120, CROWD_REAL = 0.5, LAWN_R = 2.0, TINY_R = 0.3, TINY_GAP = 0.25, T1_REAL = 0.8, T1_GAP = 0.25, T1_R = 0.3;
+  const TIER_PENALTY = 1.5, FILL_MIN_SNR = 8;   // top-up colonies must stand clearly above the background
+  // extra preference for round colonies (matters when only one colony per sector is picked)
+  const roundPenalty = (c) => ROUND_W * (Math.max(0, c.axis_ratio - 1.10) * 4 + Math.max(0, c.radial_cv - 0.10) * 6);
+  let ROUND_W = 1.0;
+  const GAP_W = 0.5;   // prefer well-separated colonies (the pin must hit only one)
+  function select(cands, n, opts) {
+    opts = opts || {};
+    rank(cands, opts);
+    const strict = opts.strictFirst !== false, minSep = opts.minSepMm != null ? opts.minSepMm : 1.0;
+    const minReal = opts.minReal != null ? opts.minReal : MIN_REAL, fillReal = opts.fillReal != null ? opts.fillReal : 0.7, minScore = opts.minScore != null ? opts.minScore : -1.0, fillLow = !!opts.fillLow, fillMin = opts.fillMinScore != null ? opts.fillMinScore : -2.0;
+    const rnd = (function (seed) { let s = (seed || 1) >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; })(opts.seed);
+    const key = (c) => opts.mode === 'random' ? (c._r != null ? c._r : (c._r = rnd())) : c.score;
+    // tiers 1-2 are "acceptable"; tier 3 (touching / irregular / very small) only when fillLow is on
+    function pickFrom(pool, k, out, maxTier) {
+      // strict-first: tier-1 colonies get a bonus over tier-2/3 but a clearly better-scoring colony in a lower tier still wins
+      const satPen = (c) => (c.r_real_ref && opts.mode !== 'random') ? SATELLITE_W * Math.max(0, Math.log(c.r_real_ref / Math.max(c.r_mm, 0.05)) - Math.log(1.6)) : 0;
+      const adj = (c) => key(c) - satPen(c) - (strict ? TIER_PENALTY * (c.tier - 1) : 0) - (opts.mode === 'random' ? 0 : roundPenalty(c)) + (opts.mode === 'random' ? 0 : GAP_W * Math.min(2.5, Math.max(-0.5, c.gap_mm)));
+      const cand = pool.filter(c => c.tier <= maxTier && out.indexOf(c) < 0).sort((a, b) => adj(b) - adj(a));
+      for (const c of cand) {
+        if (out.length >= k) break;
+        if (out.every(o => Math.hypot(c.x_mm - o.x_mm, c.y_mm - o.y_mm) >= minSep)) out.push(c);
+      }
+      return out;
+    }
+    for (const c of cands) c.lowConf = false;
+    if (opts.perSector) {
+      const nSec = opts.nSectors || 8, secs = opts.sectors || Array.from({ length: nSec }, (_, i) => i);
+      const kOf = (s) => Array.isArray(opts.perSectorK) ? (opts.perSectorK[s] || 0) : (opts.perSectorK != null ? opts.perSectorK : Math.ceil(n / secs.length));
+      let chosen = [];
+      for (const s of secs) {
+        const k = kOf(s); if (k <= 0) continue;
+        let pool = cands.filter(c => c.sector === s);
+        // sector-level evidence: a growing sector holds a population of confident colonies / many candidates; an empty one only junk
+        const pop = pool.filter(c => c.preal >= 0.5 && c.tier <= 2).length, nCand = pool.length;
+        const alive = pop >= ALIVE_POP, crowded = nCand >= CROWD_N;
+        // lone tiny specks that touch a neighbour (dust, droplets, glints) are not colonies unless the sector has a population of them
+        if (pop < ALIVE_POP) pool = pool.filter(c => !(c.r_mm < TINY_R && c.gap_mm < TINY_GAP));
+        const strictOk = (c) => c.preal >= minReal && (c.score >= minScore || (c.tier === 1 && c.score >= fillMin));
+        let out = pickFrom(pool.filter(strictOk), k, [], 2);
+        if (out.length < k) {   // clearly isolated, round, tier-1 colony with slightly lower confidence
+          pickFrom(pool.filter(c => c.tier === 1 && c.preal >= T1_REAL && c.score >= fillMin && c.gap_mm >= T1_GAP && c.r_mm >= T1_R), k, out, 1);
+        }
+        if (out.length === 0 && (alive || crowded)) {   // populated sector with no clean colony: relax the confidence gate, flag LOW
+          const before = out.length, pr = alive ? ALIVE_REAL : CROWD_REAL;
+          pickFrom(pool.filter(c => c.preal >= pr && c.score >= ALIVE_SCORE && c.snr >= 5), k, out, 3);
+          for (let q = before; q < out.length; q++) out[q].lowConf = true;
+        }
+        if (out.length < k && fillLow) {
+          const before = out.length;
+          pickFrom(pool.filter(c => c.preal >= fillReal && c.score >= fillMin && c.snr >= FILL_MIN_SNR && c.axis_ratio <= 1.6 && c.solidity >= 0.85), k, out, 3);
+          for (let q = before; q < out.length; q++) out[q].lowConf = true;
+        }
+        if (out.length < k && opts.denseFallback !== false) {   // crowded / confluent sector with no isolated colony: take the best-separated confident colonies, flagged LOW
+          const before = out.length;
+          pickFrom(pool.filter(c => c.preal >= DENSE_REAL && c.sat <= 0.05 && c.fill >= 0.75 && c.solidity >= 0.8 && c.edge_mm >= 1.0 && c.halo <= 0.2 && !(c.ring_max > 1.0 && c.touch > 0.25)), k, out, 4);
+          for (let q = before; q < out.length; q++) out[q].lowConf = true;
+        }
+        if (out.length === 0 && opts.denseFallback !== false) {   // worst case (confluent lawn, nothing separable): the best isolated large lobe, flagged LOW
+          pickFrom(pool.filter(c => c.r_mm >= LAWN_R && c.snr >= 6 && c.solidity >= 0.8 && c.fill >= 0.75 && c.halo <= 0.2 && c.sat <= 0.05 && c.edge_mm >= 1.5 && c.axis_ratio <= 1.9 && c.touch <= 0.1 && c.gap_mm >= 0.4 && c.ring_max <= 1.0), k, out, 4);
+          for (const c of out) c.lowConf = true;
+        }
+        chosen = chosen.concat(out);
+      }
+      return opts.perSectorK != null ? chosen : chosen.slice(0, n);
+    }
+    const pool = cands.filter(c => c.sector >= 0);
+    const out = pickFrom(pool.filter(c => c.preal >= minReal && (c.score >= minScore || (c.tier === 1 && c.score >= fillMin))), n, [], 2);
+    if (out.length < n && fillLow) { const before = out.length; pickFrom(pool.filter(c => c.preal >= fillReal && c.score >= fillMin && c.snr >= FILL_MIN_SNR && c.axis_ratio <= 1.6 && c.solidity >= 0.85), n, out, 3); for (let q = before; q < out.length; q++) out[q].lowConf = true; }
+    return out;
+  }
+
+  const API = {
+    analyze, rank, select, score, parseSectoring, compileSectoring, tierOf, regionInfo, scaleForAgar, DEFAULT_SCALE,
+    mmToPx: (x, y, scale, W) => { const f = (W || REF_W) / REF_W; return [CX * f + scale * x, CY * f + scale * y]; },
+    MODEL: {"features": ["radial_cv", "axis_ratio", "edge_w", "ring_max", "gap_mm", "dens3", "edge_mm", "snr", "touch", "solidity", "inscr", "fill", "sat", "clutter", "halo"], "w": [-0.9878775430999591, -1.0134364704227854, -2.8306600593656235, -1.2807593006367421, 0.09209367608957374, -0.02188336684771793, 0.4537475070978126, 1.8848809789266834, -0.7453924518594198, 6.378692439709168, 2.149773903399389, 0.43545259223158345, -20.850216516818033, 0.5344269612212657, -3.619654573189738], "b": -10.707421540896483}
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.ColonyDetect = API;
+})(typeof self !== 'undefined' ? self : this);
+
+</script>
+<script>
+// ══════════════════════════════════════
+// STATE
+// ══════════════════════════════════════
+let imgEl=null, imgW=0, imgH=0;
+let dispSc=1, zoomSc=1;
+let allBlobs=[];   // all detected, with quality metrics
+let selected=[];   // selected colonies
+let excl=new Set();
+let mode='view';
+let tgtRows=8, tgtCols=12;
+
+// Plate calibration (px → mm)
+let plateCX=0, plateCY=0, pxPerMm=10.0;
+// Plate bounds in image pixels (detected from image)
+let plateBounds={r1:0,r2:0,c1:0,c2:0};
+let showColonyOverlay=true;
+
+const cv=document.getElementById('cv');
+const ctx=cv.getContext('2d');
+
+// ══════════════════════════════════════
+// IMAGE UPLOAD
+// ══════════════════════════════════════
+const dz=document.getElementById('dz');
+document.getElementById('fi').addEventListener('change',e=>loadImg(e.target.files[0]));
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over')});
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])loadImg(e.dataTransfer.files[0])});
+
+function loadImg(file){
+  if(!file||!file.type.startsWith('image/'))return;
+  document.getElementById('fn').textContent=file.name;
+  const r=new FileReader();
+  r.onload=ev=>{
+    imgEl=new Image();
+    imgEl.onload=()=>{
+      imgW=imgEl.width; imgH=imgEl.height;
+      detectPlateBounds();
+      fitCanvas();
+      document.getElementById('emptyState').style.display='none';
+      cv.style.display='block';
+      document.getElementById('zooms').style.display='flex';
+      document.getElementById('detBtn').disabled=false;
+      document.getElementById('detNote').textContent=`Loaded ${imgW}×${imgH}px. Click Detect.`;
+      document.getElementById('detNote').className='note ni';
+      if(/8\s*well|sector|8rect/i.test(file.name)&&document.getElementById('plType').value==='sbs'){document.getElementById('plType').value='sbs8';}
+      onPlateKindChange();
+      setPill(2);
+    };
+    imgEl.src=ev.target.result;
+  };
+  r.readAsDataURL(file);
+}
+
+// ── Plate kind + calibration (replaces v10 LED-bar calibration) ──
+// Calibration: image px = (849.5 + s·x_mm, 865.5 + s·y_mm) at 1728 px width; s = 0.0229·agar_mm + 10.7612 px/mm.
+const SECTORING_XML = {"12": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"12\" Description=\"12 sectors.\" CreationDate=\"07/24/2020 11:43:43\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"True\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<FixedLayoutDivision Layout=\"12\"/>\n\t</Divisions>\n</PlateSectoring>", "1536": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"1536\" Description=\"1536 sectors.\" CreationDate=\"10/27/2017 22:58:49\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"True\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<FixedLayoutDivision Layout=\"1536\"/>\n\t</Divisions>\n</PlateSectoring>", "24": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"24\" Description=\"24 sectors.\" CreationDate=\"07/24/2020 11:42:27\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"True\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<FixedLayoutDivision Layout=\"24\"/>\n\t</Divisions>\n</PlateSectoring>", "384": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"384\" Description=\"384 sectors.\" CreationDate=\"07/07/2017 15:31:29\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"True\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<FixedLayoutDivision Layout=\"384\"/>\n\t</Divisions>\n</PlateSectoring>", "48": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"48\" Description=\"48 sectors.\" CreationDate=\"07/24/2020 11:45:37\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"True\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<FixedLayoutDivision Layout=\"48\"/>\n\t</Divisions>\n</PlateSectoring>", "6": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"6\" Description=\"6 sectors.\" CreationDate=\"07/24/2020 11:42:57\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"True\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<FixedLayoutDivision Layout=\"6\"/>\n\t</Divisions>\n</PlateSectoring>", "8 Rectangle": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"8 Recatangle\" Description=\"8 sector SBS layout.\" CreationDate=\"11/13/2017 17:01:37\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Square.SquarePlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<RectangularDivision X=\"0\" Y=\"0\" Width=\"1\" Height=\"1\"/>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.25\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.25\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.5\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.5\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.75\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.75\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0\" Y=\"0.5\" />\n\t\t\t\t<Point X=\"1\" Y=\"0.5\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t</Divisions>\n</PlateSectoring>", "96": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"96\" Description=\"96 sectors.\" CreationDate=\"05/22/2017 12:01:57\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"True\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<FixedLayoutDivision Layout=\"96\"/>\n\t</Divisions>\n</PlateSectoring>", "CircularBounds": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"None\" Description=\"Plate bounds.\" CreationDate=\"02/20/2017 15:15:13\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Petri.PetriDish\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<CircularDivision CenterX=\"0.5\" CenterY=\"0.5\" Radius=\"0.5\"/>\n\t</Divisions>\n</PlateSectoring>", "CircularQuarters": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"Quarters\" Description=\"Plate dividied into quarters.\" CreationDate=\"02/22/2017 09:27:47\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Petri.PetriDish\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n    <CircularDivision CenterX=\"0.5\" CenterY=\"0.5\" Radius=\"0.5\"/>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.5\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.5\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0\" Y=\"0.5\" />\n\t\t\t\t<Point X=\"1\" Y=\"0.5\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t</Divisions>\n</PlateSectoring>", "CircularSectionHorizontal": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"Section (Horizontal)\" Description=\"Plate dividied into a horizontal section.\" CreationDate=\"03/22/2017 11:41:27\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Petri.PetriDish\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n    <CircularDivision CenterX=\"0.5\" CenterY=\"0.5\" Radius=\"0.5\"/>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0\" Y=\"0.5\" />\n\t\t\t\t<Point X=\"1\" Y=\"0.5\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t</Divisions>\n</PlateSectoring>", "CircularSectionVertical": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"Section (Vertical)\" Description=\"Plate dividied into a vertical section.\" CreationDate=\"03/22/2017 11:41:27\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Petri.PetriDish\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n    <CircularDivision CenterX=\"0.5\" CenterY=\"0.5\" Radius=\"0.5\"/>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.5\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.5\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t</Divisions>\n</PlateSectoring>", "MSMAgeingDefault": "<PlateSectoring Name=\"MSM Ageing Default\" Description=\"Replicates the default layout for the ageing protocol on the Singer Instruments MSM.\" CreationDate=\"04/03/2019 12:17:58\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Petri.RedefinablePetriDish_90mm\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n  <Divisions>\n    \n    <RectangularDivision X=\"0.342105263157895\" Y=\"0.342105263157895\" Width=\"0.315789473684211\" Height=\"0.315789473684211\" />\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.381578947368421\" Y=\"0.342105263157895\" />\n        <Point X=\"0.381578947368421\" Y=\"0.657894736842105\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.421052631578947\" Y=\"0.342105263157895\" />\n        <Point X=\"0.421052631578947\" Y=\"0.657894736842105\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.460526315789474\" Y=\"0.342105263157895\" />\n        <Point X=\"0.460526315789474\" Y=\"0.657894736842105\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.5\" Y=\"0.342105263157895\" />\n        <Point X=\"0.5\" Y=\"0.657894736842105\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.539473684210526\" Y=\"0.342105263157895\" />\n        <Point X=\"0.539473684210526\" Y=\"0.657894736842105\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.578947368421053\" Y=\"0.342105263157895\" />\n        <Point X=\"0.578947368421053\" Y=\"0.657894736842105\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.618421052631579\" Y=\"0.342105263157895\" />\n        <Point X=\"0.618421052631579\" Y=\"0.657894736842105\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.342105263157895\" Y=\"0.381578947368421\" />\n        <Point X=\"0.657894736842105\" Y=\"0.381578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.342105263157895\" Y=\"0.421052631578947\" />\n        <Point X=\"0.657894736842105\" Y=\"0.421052631578947\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.342105263157895\" Y=\"0.460526315789474\" />\n        <Point X=\"0.657894736842105\" Y=\"0.460526315789474\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.342105263157895\" Y=\"0.5\" />\n        <Point X=\"0.657894736842105\" Y=\"0.5\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.342105263157895\" Y=\"0.539473684210526\" />\n        <Point X=\"0.657894736842105\" Y=\"0.539473684210526\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.342105263157895\" Y=\"0.578947368421053\" />\n        <Point X=\"0.657894736842105\" Y=\"0.578947368421053\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.342105263157895\" Y=\"0.618421052631579\" />\n        <Point X=\"0.657894736842105\" Y=\"0.618421052631579\" />\n      </Points>\n    </PolyLineDivision>\n  </Divisions>\n</PlateSectoring>", "MSMTDSIDefault": "<PlateSectoring Name=\"MSM TDSI Default\" Description=\"Replicates the default layout for the TDSI protocol on the Singer Instruments MSM.\" CreationDate=\"04/03/2019 12:15:08\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Petri.RedefinablePetriDish_90mm\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n  <Divisions>\n    <RectangularDivision X=\"0.105263157894737\" Y=\"0.144736842105263\" Width=\"0.789473684210526\" Height=\"0.710526315789474\" />\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.184210526315789\" Y=\"0.144736842105263\" />\n        <Point X=\"0.184210526315789\" Y=\"0.855263157894737\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.263157894736842\" Y=\"0.144736842105263\" />\n        <Point X=\"0.263157894736842\" Y=\"0.855263157894737\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.342105263157895\" Y=\"0.144736842105263\" />\n        <Point X=\"0.342105263157895\" Y=\"0.855263157894737\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.421052631578947\" Y=\"0.144736842105263\" />\n        <Point X=\"0.421052631578947\" Y=\"0.855263157894737\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.5\" Y=\"0.144736842105263\" />\n        <Point X=\"0.5\" Y=\"0.855263157894737\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.578947368421053\" Y=\"0.144736842105263\" />\n        <Point X=\"0.578947368421053\" Y=\"0.855263157894737\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.657894736842105\" Y=\"0.144736842105263\" />\n        <Point X=\"0.657894736842105\" Y=\"0.855263157894737\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.736842105263158\" Y=\"0.144736842105263\" />\n        <Point X=\"0.736842105263158\" Y=\"0.855263157894737\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.815789473684211\" Y=\"0.144736842105263\" />\n        <Point X=\"0.815789473684211\" Y=\"0.855263157894737\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.105263157894737\" Y=\"0.223684210526316\" />\n        <Point X=\"0.894736842105263\" Y=\"0.223684210526316\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.105263157894737\" Y=\"0.302631578947368\" />\n        <Point X=\"0.894736842105263\" Y=\"0.302631578947368\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.105263157894737\" Y=\"0.381578947368421\" />\n        <Point X=\"0.894736842105263\" Y=\"0.381578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.105263157894737\" Y=\"0.460526315789474\" />\n        <Point X=\"0.894736842105263\" Y=\"0.460526315789474\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.105263157894737\" Y=\"0.539473684210526\" />\n        <Point X=\"0.894736842105263\" Y=\"0.539473684210526\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.105263157894737\" Y=\"0.618421052631579\" />\n        <Point X=\"0.894736842105263\" Y=\"0.618421052631579\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.105263157894737\" Y=\"0.697368421052632\" />\n        <Point X=\"0.894736842105263\" Y=\"0.697368421052632\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.105263157894737\" Y=\"0.776315789473684\" />\n        <Point X=\"0.894736842105263\" Y=\"0.776315789473684\" />\n      </Points>\n    </PolyLineDivision>\n  </Divisions>\n</PlateSectoring>", "MSMTDSISlide": "<PlateSectoring Name=\"MSM TDSI  Slide\" Description=\"Replicates the Slide layout for the TDSI protocol on the Singer Instruments MSM.\" CreationDate=\"04/03/2019 12:17:17\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Petri.RedefinablePetriDish_90mm\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n  <Divisions>\n    <RectangularDivision X=\"0.0789473684210527\" Y=\"0.368421052631579\" Width=\"0.842105263157895\" Height=\"0.263157894736842\" />\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.131578947368421\" Y=\"0.368421052631579\" />\n        <Point X=\"0.131578947368421\" Y=\"0.631578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.184210526315789\" Y=\"0.368421052631579\" />\n        <Point X=\"0.184210526315789\" Y=\"0.631578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.236842105263158\" Y=\"0.368421052631579\" />\n        <Point X=\"0.236842105263158\" Y=\"0.631578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.289473684210526\" Y=\"0.368421052631579\" />\n        <Point X=\"0.289473684210526\" Y=\"0.631578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.342105263157895\" Y=\"0.368421052631579\" />\n        <Point X=\"0.342105263157895\" Y=\"0.631578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.394736842105263\" Y=\"0.368421052631579\" />\n        <Point X=\"0.394736842105263\" Y=\"0.631578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.447368421052632\" Y=\"0.368421052631579\" />\n        <Point X=\"0.447368421052632\" Y=\"0.631578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.5\" Y=\"0.368421052631579\" />\n        <Point X=\"0.5\" Y=\"0.631578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.552631578947368\" Y=\"0.368421052631579\" />\n        <Point X=\"0.552631578947368\" Y=\"0.631578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.605263157894737\" Y=\"0.368421052631579\" />\n        <Point X=\"0.605263157894737\" Y=\"0.631578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.657894736842105\" Y=\"0.368421052631579\" />\n        <Point X=\"0.657894736842105\" Y=\"0.631578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.710526315789474\" Y=\"0.368421052631579\" />\n        <Point X=\"0.710526315789474\" Y=\"0.631578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.763157894736842\" Y=\"0.368421052631579\" />\n        <Point X=\"0.763157894736842\" Y=\"0.631578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.815789473684211\" Y=\"0.368421052631579\" />\n        <Point X=\"0.815789473684211\" Y=\"0.631578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.868421052631579\" Y=\"0.368421052631579\" />\n        <Point X=\"0.868421052631579\" Y=\"0.631578947368421\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.0789473684210527\" Y=\"0.421052631578947\" />\n        <Point X=\"0.921052631578947\" Y=\"0.421052631578947\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.0789473684210527\" Y=\"0.473684210526316\" />\n        <Point X=\"0.921052631578947\" Y=\"0.473684210526316\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.0789473684210527\" Y=\"0.526315789473684\" />\n        <Point X=\"0.921052631578947\" Y=\"0.526315789473684\" />\n      </Points>\n    </PolyLineDivision>\n    <PolyLineDivision>\n      <Points>\n        <Point X=\"0.0789473684210527\" Y=\"0.578947368421053\" />\n        <Point X=\"0.921052631578947\" Y=\"0.578947368421053\" />\n      </Points>\n    </PolyLineDivision>\n  </Divisions>\n</PlateSectoring>", "Rectangular12Columns": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"12 Columns\" Description=\"12 Columns to fit a 96 SBS layout.\" CreationDate=\"11/13/2017 17:01:37\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Square.SquarePlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<RectangularDivision X=\"0\" Y=\"0\" Width=\"1\" Height=\"1\"/>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.0871559633027523\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.0871559633027523\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.169724770642202\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.169724770642202\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.252293577981651\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.252293577981651\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.334862385321101\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.334862385321101\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.41743119266055\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.41743119266055\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.5\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.5\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.58256880733945\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.58256880733945\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.6651376146788994\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.665137614678899\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.747706422018349\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.747706422018349\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.830275229357798\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.830275229357798\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.912844036697248\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.912844036697248\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t</Divisions>\n</PlateSectoring>", "Rectangular8Rows": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"8 Rows\" Description=\"8 rows to fit a 96 SBS layout.\" CreationDate=\"01/28/2020 15:13:37\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Square.SquarePlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<RectangularDivision X=\"0\" Y=\"0\" Width=\"1\" Height=\"1\"/>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0\" Y=\"0.125\" />\n\t\t\t\t<Point X=\"1\" Y=\"0.125\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0\" Y=\"0.25\" />\n\t\t\t\t<Point X=\"1\" Y=\"0.25\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0\" Y=\"0.375\" />\n\t\t\t\t<Point X=\"1\" Y=\"0.375\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0\" Y=\"0.5\" />\n\t\t\t\t<Point X=\"1\" Y=\"0.5\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0\" Y=\"0.625\" />\n\t\t\t\t<Point X=\"1\" Y=\"0.625\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0\" Y=\"0.75\" />\n\t\t\t\t<Point X=\"1\" Y=\"0.75\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0\" Y=\"0.875\" />\n\t\t\t\t<Point X=\"1\" Y=\"0.875\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t</Divisions>\n</PlateSectoring>", "RectangularBounds": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"None\" Description=\"Plate bounds.\" CreationDate=\"02/20/2017 15:15:13\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n      <CompatabilityDefinition Type=\"SI.Consumables.Plates.Square.SquarePlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<RectangularDivision X=\"0\" Y=\"0\" Width=\"1\" Height=\"1\"/>\n\t</Divisions>\n</PlateSectoring>", "RectangularDiagonals": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"Diagonals\" Description=\"Plate dividied diagonally.\" CreationDate=\"02/23/2017 16:43:47\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Square.SquarePlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n    <RectangularDivision X=\"0\" Y=\"0\" Width=\"1\" Height=\"1\"/>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0\" Y=\"0\" />\n\t\t\t\t<Point X=\"1\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"1\" Y=\"0\" />\n\t\t\t\t<Point X=\"0\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t</Divisions>\n</PlateSectoring>", "RectangularHorizontalSection": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"Horizontal Section\" Description=\"Horizontal section through plate.\" CreationDate=\"02/20/2017 15:15:13\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Square.SquarePlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<RectangularDivision X=\"0\" Y=\"0\" Width=\"1\" Height=\"1\"/>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0\" Y=\"0.5\" />\n\t\t\t\t<Point X=\"1\" Y=\"0.5\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t</Divisions>\n</PlateSectoring>", "RectangularQuarters": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"Quarters\" Description=\"Plate dividied into quarters.\" CreationDate=\"02/22/2017 09:27:47\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Square.SquarePlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n    <RectangularDivision X=\"0\" Y=\"0\" Width=\"1\" Height=\"1\"/>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.5\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.5\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0\" Y=\"0.5\" />\n\t\t\t\t<Point X=\"1\" Y=\"0.5\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t</Divisions>\n</PlateSectoring>", "RectangularVerticalSection": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"Vertical Section\" Description=\"Vertical section through plate.\" CreationDate=\"02/20/2017 15:15:13\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Square.SquarePlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<RectangularDivision X=\"0\" Y=\"0\" Width=\"1\" Height=\"1\"/>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.5\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.5\" Y=\"1\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t</Divisions>\n</PlateSectoring>", "8 sector split": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"Shimadzu 8 Well \" Description=\"Shimadzu 8 Well\" CreationDate=\"02/23/2017 16:43:47\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<RectangularDivision X=\"0\" Y=\"0.03\" Width=\"0.16\" Height=\"0.4\"/>\n\t\t<RectangularDivision X=\"0.28\" Y=\"0.03\" Width=\"0.16\" Height=\"0.4\"/>\n\t\t<RectangularDivision X=\"0.54\" Y=\"0.03\" Width=\"0.16\" Height=\"0.4\"/>\n\t\t<RectangularDivision X=\"0.83\" Y=\"0.03\" Width=\"0.16\" Height=\"0.4\"/>\n\t\t<RectangularDivision X=\"0\" Y=\"0.6\" Width=\"0.16\" Height=\"0.4\"/>\n\t\t<RectangularDivision X=\"0.28\" Y=\"0.6\" Width=\"0.16\" Height=\"0.4\"/>\n\t\t<RectangularDivision X=\"0.54\" Y=\"0.6\" Width=\"0.16\" Height=\"0.4\"/>\n\t\t<RectangularDivision X=\"0.83\" Y=\"0.6\" Width=\"0.16\" Height=\"0.4\"/>\n\t</Divisions>\n</PlateSectoring>", "96 corners removed - V4": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"SBS Corners Removed V4\" Description=\"SBS Format with corner removed.\" CreationDate=\"02/23/2017 16:43:47\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"True\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<RectangularDivision X=\"0\" Y=\"0\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.0833333333\" Y=\"0\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.1666666666\" Y=\"0\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.2499999999\" Y=\"0\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.3333333332\" Y=\"0\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.4166666665\" Y=\"0\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5\" Y=\"0\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5833333333\" Y=\"0\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.6666666666\" Y=\"0\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.7499999999\" Y=\"0\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.8333333332\" Y=\"0\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.9166666665\" Y=\"0\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0\" Y=\"0.125\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.0833333333\" Y=\"0.125\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.1666666666\" Y=\"0.125\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.2499999999\" Y=\"0.125\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.3333333332\" Y=\"0.125\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.4166666665\" Y=\"0.125\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5\" Y=\"0.125\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5833333333\" Y=\"0.125\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.6666666666\" Y=\"0.125\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.7499999999\" Y=\"0.125\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.8333333332\" Y=\"0.125\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.9166666665\" Y=\"0.125\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0\" Y=\"0.25\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.0833333333\" Y=\"0.25\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.1666666666\" Y=\"0.25\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.2499999999\" Y=\"0.25\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.3333333332\" Y=\"0.25\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.4166666665\" Y=\"0.25\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5\" Y=\"0.25\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5833333333\" Y=\"0.25\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.6666666666\" Y=\"0.25\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.7499999999\" Y=\"0.25\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.8333333332\" Y=\"0.25\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.9166666665\" Y=\"0.25\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0\" Y=\"0.375\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.0833333333\" Y=\"0.375\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.1666666666\" Y=\"0.375\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.2499999999\" Y=\"0.375\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.3333333332\" Y=\"0.375\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.4166666665\" Y=\"0.375\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5\" Y=\"0.375\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5833333333\" Y=\"0.375\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.6666666666\" Y=\"0.375\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.7499999999\" Y=\"0.375\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.8333333332\" Y=\"0.375\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.9166666665\" Y=\"0.375\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0\" Y=\"0.5\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.0833333333\" Y=\"0.5\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.1666666666\" Y=\"0.5\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.2499999999\" Y=\"0.5\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.3333333332\" Y=\"0.5\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.4166666665\" Y=\"0.5\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5\" Y=\"0.5\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5833333333\" Y=\"0.5\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.6666666666\" Y=\"0.5\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.7499999999\" Y=\"0.5\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.8333333332\" Y=\"0.5\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.9166666665\" Y=\"0.5\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0\" Y=\"0.625\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.0833333333\" Y=\"0.625\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.1666666666\" Y=\"0.625\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.2499999999\" Y=\"0.625\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.3333333332\" Y=\"0.625\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.4166666665\" Y=\"0.625\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5\" Y=\"0.625\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5833333333\" Y=\"0.625\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.6666666666\" Y=\"0.625\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.7499999999\" Y=\"0.625\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.8333333332\" Y=\"0.625\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.9166666665\" Y=\"0.625\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0\" Y=\"0.75\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.0833333333\" Y=\"0.75\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.1666666666\" Y=\"0.75\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.2499999999\" Y=\"0.75\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.3333333332\" Y=\"0.75\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.4166666665\" Y=\"0.75\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5\" Y=\"0.75\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5833333333\" Y=\"0.75\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.6666666666\" Y=\"0.75\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.7499999999\" Y=\"0.75\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.8333333332\" Y=\"0.75\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.9166666665\" Y=\"0.75\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0\" Y=\"0.875\" />\n\t\t\t\t<Point X=\"0.083\" Y=\"0.875\" />\n\t\t\t\t<Point X=\"0.083\" Y=\"1\" />\n\t\t\t\t<Point X=\"0.069\" Y=\"1\" />\n\t\t\t\t<Point X=\"0\" Y=\"0.9\" />\n\t\t\t\t<Point X=\"0\" Y=\"0.875\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t\t<RectangularDivision X=\"0.0833333333\" Y=\"0.875\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.1666666666\" Y=\"0.875\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.2499999999\" Y=\"0.875\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.3333333332\" Y=\"0.875\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.4166666665\" Y=\"0.875\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5\" Y=\"0.875\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.5833333333\" Y=\"0.875\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.6666666666\" Y=\"0.875\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.7499999999\" Y=\"0.875\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<RectangularDivision X=\"0.8333333332\" Y=\"0.875\" Width=\"0.0833333333\" Height=\"0.125\"/>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.916\" Y=\"0.875\" />\n\t\t\t\t<Point X=\"1\" Y=\"0.875\" />\n\t\t\t\t<Point X=\"1\" Y=\"0.9\" />\n\t\t\t\t<Point X=\"0.931\" Y=\"1\" />\n\t\t\t\t<Point X=\"0.916\" Y=\"1\" />\n\t\t\t\t<Point X=\"0.916\" Y=\"0.875\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t</Divisions>\n</PlateSectoring>", "RectangularBoundsBottom": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"Lanzatech Corners Removed \" Description=\"SBS Format with corner removed.\" CreationDate=\"02/23/2017 16:43:47\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Square.SquarePlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.01\" Y=\"0.01\" />\n\t\t\t\t<Point X=\"0.99\" Y=\"0.01\" />\n\t\t\t\t<Point X=\"0.99\" Y=\"0.89\" />\n\t\t\t\t<Point X=\"0.931\" Y=\"0.98\" />\n\t\t\t\t<Point X=\"0.069\" Y=\"0.98\" />\n\t\t\t\t<Point X=\"0.01\" Y=\"0.89\"/>\n\t\t\t\t<Point X=\"0.01\" Y=\"0.01\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t</Divisions>\n</PlateSectoring>", "RectangularBoundsTop": "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n<PlateSectoring Name=\"SBS Corners Removed\" Description=\"SBS Format with corner removed.\" CreationDate=\"02/23/2017 16:43:47\" CreatedBy=\"Singer Instruments\" IsBasedOnFixedLayout=\"False\">\n  <CompatabilityDefinitions>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.SBS.SBSPlate\" Assembly=\"SI.Consumables\"/>\n    <CompatabilityDefinition Type=\"SI.Consumables.Plates.Square.SquarePlate\" Assembly=\"SI.Consumables\"/>\n  </CompatabilityDefinitions>\n\t<Divisions>\n\t\t<PolyLineDivision>\n\t\t\t<Points>\n\t\t\t\t<Point X=\"0.069\" Y=\"0\" />\n\t\t\t\t<Point X=\"0.931\" Y=\"0\" />\n\t\t\t\t<Point X=\"1\" Y=\"0.1\" />\n\t\t\t\t<Point X=\"1\" Y=\"1\" />\n\t\t\t\t<Point X=\"0\" Y=\"1\" />\n\t\t\t\t<Point X=\"0\" Y=\"0.1\" />\n\t\t\t\t<Point X=\"0.069\" Y=\"0\" />\n\t\t\t</Points>\n\t\t</PolyLineDivision>\n\t</Divisions>\n</PlateSectoring>"};
+
+let plateKind='sbs';            // physical plate: 'sbs' | 'sbs8' | 'petri'
+let compiledSect=null;          // compiled sectoring layer (or null)
+const sectDefs=[];              // {key,name,def}
+const sectCache=new Map();
+for(const [k,t] of Object.entries(SECTORING_XML)){ try{ const d=ColonyDetect.parseSectoring(t); if(d.name.toLowerCase()!=='none'||d.lines.length) sectDefs.push({key:k,name:d.name,def:d}); }catch(e){} }
+function sectBase(){ return document.getElementById('plType').value==='petri'?'petri':'sbs'; }
+function guessKind(){ return document.getElementById('plType').value; }
+function calibrate(){
+  plateKind=guessKind();
+  const ad=parseFloat(document.getElementById('agarD').value);
+  const f=imgW/1728;
+  const s=isFinite(ad)?ColonyDetect.scaleForAgar(ad):ColonyDetect.DEFAULT_SCALE[plateKind];
+  pxPerMm=s*f; plateCX=849.5*f; plateCY=865.5*f; window.sectPxPerMm=pxPerMm;
+  const hx=plateKind==='petri'?39.5:54.5, hy=plateKind==='petri'?39.5:36.5, oy=plateKind==='petri'?0.3:0;
+  plateBounds={c1:plateCX-hx*pxPerMm, c2:plateCX+hx*pxPerMm, r1:plateCY+(oy-hy)*pxPerMm, r2:plateCY+(oy+hy)*pxPerMm};
+}
+function detectPlateBounds(){ calibrate(); }
+document.getElementById('agarD').addEventListener('input',()=>{if(imgEl){calibrate();redraw();}});
+
+// ---- sectoring UI ----
+function fillSectOptions(prefer){
+  const base=sectBase(), sel=document.getElementById('plSect'); const prev=prefer||sel.value;
+  sel.innerHTML='<option value="none">None (no sectoring)</option>';
+  for(const d of sectDefs){ if(!d.def.compat.includes(base))continue; const o=document.createElement('option'); o.value=d.key; o.textContent=d.name; sel.appendChild(o); }
+  const imp=document.createElement('option'); imp.value='__import__'; imp.textContent='Import sectoring XML…'; sel.appendChild(imp);
+  sel.value=[...sel.options].some(o=>o.value===prev)?prev:'none';
+}
+function getCompiled(){
+  const key=document.getElementById('plSect').value; if(key==='none'||key==='__import__')return null;
+  const d=sectDefs.find(x=>x.key===key); if(!d)return null;
+  const ck=key+'|'+sectBase(); if(!sectCache.has(ck))sectCache.set(ck,ColonyDetect.compileSectoring(d.def,sectBase()));
+  return sectCache.get(ck);
+}
+function buildSecChk(){
+  const el=document.getElementById('secChk'), n=compiledSect?compiledSect.n:0; el.innerHTML='';
+  document.getElementById('secChkWrap').style.display=(n>1&&n<=16)?'block':'none';
+  if(n>1&&n<=16){ for(let i=0;i<n;i++){const l=document.createElement('label');l.style.cssText='display:flex;align-items:center;gap:2px;color:var(--txm)';
+    l.innerHTML=`<input type="checkbox" class="secC" data-s="${i}" checked style="width:auto">S${i+1}`;el.appendChild(l);}
+    el.querySelectorAll('input').forEach(c=>c.addEventListener('change',()=>{syncSectorTarget();if(allBlobs.length)applyFilters();})); }
+}
+function enabledSectors(){
+  if(!compiledSect)return [];
+  if(compiledSect.n>16)return Array.from({length:compiledSect.n},(_,i)=>i);
+  return [...document.querySelectorAll('.secC')].filter(c=>c.checked).map(c=>+c.dataset.s);
+}
+function syncSectorTarget(){
+  if(!compiledSect)return;
+  const k=parseInt(document.getElementById('perSecK').value)||1;
+  document.getElementById('tgtC').value=Math.min(384,k*enabledSectors().length);
+}
+function applySectoring(){
+  compiledSect=getCompiled();
+  const has=!!compiledSect;
+  document.getElementById('sectBox').style.display=has?'block':'none';
+  document.getElementById('tgtC').disabled=has;
+  { const t=document.getElementById('tgtC'), lb=t.previousElementSibling; t.style.opacity=has?'.35':'1'; t.style.cursor=has?'not-allowed':''; if(lb){lb.style.opacity=has?'.35':'1'; lb.title=has?'Set by the sectoring profile: sectors x colonies per sector':'';} t.title=has?'Set by the sectoring profile: sectors x colonies per sector':''; }
+  document.getElementById('sectInfo').textContent=has?`${compiledSect.n} sector${compiledSect.n===1?'':'s'}`+(compiledSect.n>16?' (all used)':''):'';
+  buildSecChk(); secOverlayCache=null;
+  if(has)syncSectorTarget();
+  if(allBlobs.length){
+    for(const c of allBlobs)c.sector=compiledSect?secAt(c):0;
+    ColonyDetect.rank(allBlobs,{sizeNeutral:document.getElementById('sizeN').checked});
+    applyFilters();
+  }
+  redraw();
+}
+function onPlateKindChange(){
+  const t=document.getElementById('plType').value;
+  fillSectOptions(t==='sbs8'?'R:8 sector split':null);
+  if(t==='sbs8'&&document.getElementById('plSect').value==='none')document.getElementById('plSect').value=(sectDefs.find(d=>d.name==='Shimadzu 8 Well')||{}).key||'none';
+  if(imgEl)calibrate();
+  applySectoring();
+  if(imgEl&&allBlobs.length)runDetect();
+}
+document.getElementById('plType').addEventListener('change',onPlateKindChange);
+document.getElementById('plSect').addEventListener('change',e=>{
+  if(e.target.value==='__import__'){e.target.value='none';document.getElementById('sectFile').click();return;}
+  applySectoring();
+});
+document.getElementById('sectFile').addEventListener('change',async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f)return;
+  try{
+    const d=ColonyDetect.parseSectoring(await f.text());
+    if(!d.compat.includes(sectBase())){document.getElementById('sectInfo').textContent=`"${d.name}" is not compatible with this plate type.`;return;}
+    const key='custom:'+f.name; const i=sectDefs.findIndex(x=>x.key===key); if(i>=0)sectDefs.splice(i,1);
+    sectDefs.push({key,name:d.name+' (imported)',def:d}); sectCache.clear();
+    fillSectOptions(key); applySectoring();
+  }catch(err){document.getElementById('sectInfo').textContent='Could not read sectoring file: '+err.message;}
+});
+document.getElementById('perSecK').addEventListener('input',()=>{syncSectorTarget();if(allBlobs.length)applyFilters();});
+document.getElementById('fillLow').addEventListener('change',()=>{if(allBlobs.length)applyFilters();});
+fillSectOptions(); 
+
+// ══════════════════════════════════════
+// CANVAS
+// ══════════════════════════════════════
+function fitCanvas(){
+  const v=document.getElementById('viewer');
+  const mw=v.clientWidth-4, mh=v.clientHeight-4;
+  dispSc=Math.min(mw/imgW,mh/imgH,1);
+  zoomSc=dispSc;
+  cv.width=Math.round(imgW*zoomSc);
+  cv.height=Math.round(imgH*zoomSc);
+  redraw();
+}
+
+function redraw(){
+  if(!imgEl)return;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.drawImage(imgEl,0,0,cv.width,cv.height);
+
+  // Draw plate boundary box
+  if(plateBounds.r2>0){
+    const px1=plateBounds.c1*zoomSc, py1=plateBounds.r1*zoomSc;
+    const px2=plateBounds.c2*zoomSc, py2=plateBounds.r2*zoomSc;
+    ctx.strokeStyle='rgba(0,229,192,0.25)';
+    ctx.lineWidth=1;
+    ctx.setLineDash([4,4]);
+    ctx.strokeRect(px1,py1,px2-px1,py2-py1);
+    ctx.setLineDash([]);
+  }
+
+  drawSectors(ctx,zoomSc,1);
+  // Draw all detected blobs (faint, quality-colored)
+  if(showColonyOverlay){
+  const selKeys=new Set(selected.map(s=>`${Math.round(s.x)}_${Math.round(s.y)}`));
+  for(const b of allBlobs){
+    if(selKeys.has(`${Math.round(b.x)}_${Math.round(b.y)}`))continue;
+    const q=b.tier<=2?1:0.4;
+    const sx=b.x*zoomSc, sy=b.y*zoomSc, sr=Math.max(b.r*zoomSc,2);
+    ctx.beginPath();ctx.arc(sx,sy,sr,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(0,229,192,${0.07+q*0.2})`;
+    ctx.lineWidth=1; ctx.stroke();
+  }
+
+  } // end showColonyOverlay blobs
+
+  // Draw selected
+  if(showColonyOverlay){
+  for(let i=0;i<selected.length;i++){
+    const c=selected[i];
+    const sx=c.x*zoomSc, sy=c.y*zoomSc, sr=Math.max(c.r*zoomSc,5);
+    const col=c.type==='manual'?'#ff7043':c.lowConf?'#ffca28':'#448aff';
+    // Glow
+    ctx.beginPath();ctx.arc(sx,sy,sr+3,0,Math.PI*2);
+    ctx.strokeStyle=col+'30';ctx.lineWidth=5;ctx.stroke();
+    // Ring
+    ctx.beginPath();ctx.arc(sx,sy,sr,0,Math.PI*2);
+    ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.stroke();
+    // Center
+    ctx.beginPath();ctx.arc(sx,sy,2.5,0,Math.PI*2);
+    ctx.fillStyle=col;ctx.fill();
+    // Label
+    if(c.well){
+      const fs=Math.max(7,Math.min(sr*0.75,13));
+      ctx.font=`bold ${fs}px JetBrains Mono,monospace`;
+      ctx.textAlign='center';
+      ctx.shadowColor='#000';ctx.shadowBlur=4;
+      ctx.fillStyle='#fff';
+      ctx.fillText(c.well,sx,sy-sr-3);
+      ctx.shadowBlur=0;
+    }
+  }
+  } // end showColonyOverlay selected
+}
+
+// ══════════════════════════════════════
+// DETECTION — ColonyDetect (multi-scale LoG detector + trained size-free ranking model)
+// ══════════════════════════════════════
+document.getElementById('detBtn').addEventListener('click', runDetect);
+
+async function runDetect(){
+  showOv('Reading image…'); await sleep(30);
+  calibrate();
+  const off=document.createElement('canvas'); off.width=imgW; off.height=imgH;
+  const oc=off.getContext('2d'); oc.drawImage(imgEl,0,0);
+  const rgba=oc.getImageData(0,0,imgW,imgH).data;
+  showOv('Detecting colonies…','multi-scale blob analysis, a few seconds'); await sleep(40);
+  const ad=parseFloat(document.getElementById('agarD').value);
+  const out=ColonyDetect.analyze(rgba,imgW,imgH,{kind:plateKind,agarDepth:isFinite(ad)?ad:undefined,sectoring:compiledSect});
+  const cands=out.candidates;
+  ColonyDetect.rank(cands,{sizeNeutral:document.getElementById('sizeN').checked});
+  for(const c of cands){
+    c.r=c.r_px;
+    c.circularity=Math.max(0,Math.min(1,1-c.radial_cv));
+    c.nn_mm=Math.max(0,c.gap_mm);
+    c.quality=1/(1+Math.exp(-c.score));
+  }
+  allBlobs=cands.filter(c=>c.tier<=3).sort((a,b)=>b.score-a.score);
+  document.getElementById('detNote').textContent=`✓ ${allBlobs.length} candidates (${plateKind}, ${pxPerMm.toFixed(2)} px/mm).`;
+  document.getElementById('detNote').className='note nok';
+  document.getElementById('passBg').textContent=`${allBlobs.length} total`;
+  document.getElementById('modebar').style.display='flex';
+  setPill(3);
+  applyFilters();
+  hideOv();
+  redraw();
+}
+
+// ══════════════════════════════════════
+// FILTERS — live update on slider change
+// ══════════════════════════════════════
+function applyFilters(){
+  const minIso=parseFloat(document.getElementById('slIso').value);
+  const minCir=parseFloat(document.getElementById('slCir').value);
+  const minSz=parseFloat(document.getElementById('slSzMin').value);
+  const maxSz=parseFloat(document.getElementById('slSzMax').value);
+
+  const passing=allBlobs.filter(b=>
+    b.nn_mm>=minIso && b.circularity>=minCir && b.r>=minSz && b.r<=maxSz
+  );
+  document.getElementById('passBg').textContent=`${passing.length} passing`;
+
+  const target=parseInt(document.getElementById('tgtC').value)||88;
+  document.getElementById('stT').textContent=target;
+  updTgtCfg();
+  const wells=availWells();
+  const manuals=selected.filter(s=>s.type==='manual');
+  const usedW=new Set(manuals.map(m=>m.well));
+  const openW=wells.filter(w=>!usedW.has(w));
+  const take=Math.max(0,Math.min(passing.length,openW.length,target-manuals.length));
+  const sectored=!!compiledSect;
+  const common={mode:document.getElementById('strat').value,seed:1,sizeNeutral:document.getElementById('sizeN').checked,
+    strictFirst:document.getElementById('strictF').checked,minSepMm:parseFloat(document.getElementById('slSep').value),fillLow:document.getElementById('fillLow').checked};
+  let picks=[];
+  if(sectored){
+    syncSectorTarget();
+    const k=parseInt(document.getElementById('perSecK').value)||1;
+    const secs=enabledSectors();
+    const kArr=Array(compiledSect.n).fill(0); secs.forEach(sc=>kArr[sc]=k);
+    for(const m of manuals){ // manual picks count toward their sector's target
+      const sc=secAt(m); if(sc>=0&&kArr[sc]>0)kArr[sc]--; }
+    picks=ColonyDetect.select(passing,0,{...common,perSector:true,nSectors:compiledSect.n,perSectorK:kArr,sectors:secs,fillLow:document.getElementById('fillLow').checked}).slice(0,openW.length);
+    window._secTarget=kArr;
+  }else if(take>0){
+    picks=ColonyDetect.select(passing,take,common);
+  }
+  selected=[...manuals,...picks.map((b,i)=>({...b,type:'auto',well:openW[i]}))];
+  secSummary(manuals);
+  if(allBlobs.length) document.getElementById('detNote').textContent=`✓ ${allBlobs.length} candidates · ${picks.length} auto-picked (${plateKind}).`;
+  updateUI();
+  redraw();
+}
+
+function setupFilterListeners(){
+  const pairs=[['slIso','vIso',1],['slCir','vCir',2],['slSzMin','vSzMin',0],['slSzMax','vSzMax',0]];
+  pairs.forEach(([sid,vid,dec])=>{
+    document.getElementById(sid).addEventListener('input',()=>{
+      const v=parseFloat(document.getElementById(sid).value);
+      document.getElementById(vid).textContent=v.toFixed(dec);
+      applyFilters();
+    });
+  });
+  document.getElementById('tgtC').addEventListener('input',applyFilters);
+  ['strat','sizeN','strictF'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{ if(!allBlobs.length)return; if(id==='sizeN'){ColonyDetect.rank(allBlobs,{sizeNeutral:document.getElementById('sizeN').checked});} applyFilters(); }));
+  document.getElementById('slSep').addEventListener('input',e=>{document.getElementById('vSep').textContent=parseFloat(e.target.value).toFixed(1);if(allBlobs.length)applyFilters();});
+  document.getElementById('tgtF').addEventListener('change',()=>{updTgtCfg();applyFilters();});
+  document.getElementById('rstBtn').addEventListener('click',()=>{
+    document.getElementById('slIso').value=0;document.getElementById('vIso').textContent='0.0';
+    document.getElementById('slCir').value=0;document.getElementById('vCir').textContent='0.00';
+    document.getElementById('slSzMin').value=1;document.getElementById('vSzMin').textContent='1';
+    document.getElementById('slSzMax').value=50;document.getElementById('vSzMax').textContent='50';
+    applyFilters();
+  });
+}
+setupFilterListeners();
+
+// ══════════════════════════════════════
+// SECTORS — summary + outlines
+// ══════════════════════════════════════
+let secOverlayCache=null;
+function secSummary(){
+  const el=document.getElementById('secNote'); if(!el)return;
+  if(!compiledSect){el.style.display='none';return;}
+  const k=parseInt(document.getElementById('perSecK').value)||1, secs=enabledSectors();
+  const cnt=new Array(compiledSect.n).fill(0), low=new Array(compiledSect.n).fill(0);
+  for(const c of selected){const sc=secAt(c); if(sc>=0){cnt[sc]++; if(c.lowConf)low[sc]++;}}
+  const color=(s)=>cnt[s]>=k?'var(--good)':cnt[s]>0?'var(--warn)':'var(--bad)';
+  let html='<div style="color:var(--txd);margin-bottom:2px">Per-sector picks</div>';
+  if(secs.length<=16){
+    html+=secs.map(s=>`<div style="display:flex;justify-content:space-between"><span>S${s+1}</span><span style="color:${color(s)}">${cnt[s]}/${k}${low[s]?` <span style="color:var(--warn)">(${low[s]} low-conf)</span>`:''}</span></div>`).join('');
+  }else{
+    const full=secs.filter(s=>cnt[s]>=k).length, empty=secs.filter(s=>cnt[s]===0).length;
+    html+=`<div>${full}/${secs.length} sectors at target</div><div style="color:var(--bad)">${empty} with no pick</div>`;
+  }
+  el.style.display='block'; el.innerHTML=html;
+}
+function buildSecOverlay(){
+  if(secOverlayCache||!compiledSect)return secOverlayCache;
+  const {GW,GH,label:L}=compiledSect, cvs=document.createElement('canvas'); cvs.width=GW; cvs.height=GH;
+  const c=cvs.getContext('2d'), im=c.createImageData(GW,GH), d=im.data;
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const a=L[y*GW+x]; if(a<0)continue;
+    const r=x<GW-1?L[y*GW+x+1]:-1, dn=y<GH-1?L[(y+1)*GW+x]:-1, l=x>0?L[y*GW+x-1]:-1, u=y>0?L[(y-1)*GW+x]:-1;
+    if(r!==a||dn!==a||l!==a||u!==a){const i=(y*GW+x)*4; d[i]=255;d[i+1]=202;d[i+2]=40;d[i+3]=170;}
+  }
+  c.putImageData(im,0,0); secOverlayCache=cvs; return cvs;
+}
+function secAt(o){ if(!compiledSect)return 0; const x=(o.x!=null?o.x:plateCX+o.x_mm*pxPerMm), y=(o.y!=null?o.y:plateCY+o.y_mm*pxPerMm); return compiledSect.sectorAt((x-plateCX)/sectPxPerMm,(y-plateCY)/sectPxPerMm); }
+function drawSectors(c2d,sc,lw){
+  if(!compiledSect)return;
+  const cvs=buildSecOverlay(); if(!cvs)return;
+  c2d.save(); c2d.imageSmoothingEnabled=false;
+  c2d.drawImage(cvs,(plateCX+compiledSect.x0*sectPxPerMm)*sc,(plateCY+compiledSect.y0*sectPxPerMm)*sc,compiledSect.GW*compiledSect.res*sectPxPerMm*sc,compiledSect.GH*compiledSect.res*sectPxPerMm*sc);
+  if(compiledSect.n<=100){
+    c2d.font=`bold ${Math.round(sc===1?26:12)}px JetBrains Mono,monospace`; c2d.fillStyle='rgba(255,202,40,0.85)'; c2d.textAlign='center';
+    compiledSect.centroids.forEach((c,i)=>{ if(c)c2d.fillText('S'+(i+1),(plateCX+c.x*sectPxPerMm)*sc,(plateCY+c.y*sectPxPerMm)*sc); });
+  }
+  c2d.restore();
+}
+
+// ══════════════════════════════════════
+// WELLS
+// ══════════════════════════════════════
+function updTgtCfg(){
+  const f=document.getElementById('tgtF').value;
+  if(f.includes('384')){tgtRows=16;tgtCols=24;}else{tgtRows=8;tgtCols=12;}
+}
+function availWells(){
+  const w=[];
+  for(let r=0;r<tgtRows;r++) for(let c=1;c<=tgtCols;c++){
+    const wl=String.fromCharCode(65+r)+c;
+    if(!excl.has(wl))w.push(wl);
+  }
+  return w;
+}
+function parseExcl(s){
+  const out=new Set();
+  s.split(',').map(x=>x.trim()).filter(Boolean).forEach(p=>{
+    const rng=p.match(/^([A-Z])(\d+)-\1(\d+)$/i);
+    if(rng){for(let c=+rng[2];c<=+rng[3];c++)out.add(rng[1].toUpperCase()+c);}
+    else{const m=p.match(/^([A-Z])(\d+)$/i);if(m)out.add(m[1].toUpperCase()+m[2]);}
+  });
+  return out;
+}
+function renderExcl(){
+  document.getElementById('excT').innerHTML=[...excl].map(w=>`<div class="et" onclick="rmExcl('${w}')">${w} ×</div>`).join('');
+}
+function rmExcl(w){excl.delete(w);renderExcl();if(allBlobs.length)applyFilters();}
+document.getElementById('excI').addEventListener('input',e=>{
+  excl=parseExcl(e.target.value);renderExcl();if(allBlobs.length)applyFilters();
+});
+function reassignWells(){
+  updTgtCfg();const ws=availWells();let wi=0;
+  for(const c of selected)c.well=wi<ws.length?ws[wi++]:null;
+}
+
+// ══════════════════════════════════════
+// CANVAS INTERACTION
+// ══════════════════════════════════════
+cv.addEventListener('click',e=>{
+  if(!imgEl)return;
+  const[ix,iy]=c2i(e);
+  if(mode==='add'){
+    // Snap to nearest unselected blob
+    const bh=nearB(ix,iy,50/zoomSc);
+    let entry;
+    if(bh!==-1) entry={...allBlobs[bh],type:'manual'};
+    else entry={x:ix,y:iy,r:10,type:'manual',
+      x_mm:(ix-plateCX)/pxPerMm,y_mm:(iy-plateCY)/pxPerMm,
+      circularity:0,nn_mm:0,quality:0};
+    const ws=availWells().filter(w=>!selected.find(s=>s.well===w));
+    entry.well=ws[0]||null;
+    selected.push(entry);updateUI();redraw();
+  }else if(mode==='rm'){
+    const h=nearS(ix,iy,50/zoomSc);
+    if(h!==-1){selected.splice(h,1);reassignWells();updateUI();redraw();}
+  }else{
+    const h=nearS(ix,iy,50/zoomSc);
+    if(h!==-1)scrollToItem(h);
+  }
+});
+
+cv.addEventListener('contextmenu',e=>{
+  e.preventDefault();
+  const[ix,iy]=c2i(e);
+  const h=nearS(ix,iy,50/zoomSc);
+  if(h!==-1){selected.splice(h,1);reassignWells();updateUI();redraw();}
+});
+
+cv.addEventListener('mousemove',e=>{
+  if(!imgEl)return;
+  const[ix,iy]=c2i(e);
+  const tip=document.getElementById('tip');
+  const hs=nearS(ix,iy,40/zoomSc);
+  if(hs!==-1){
+    const c=selected[hs];
+    tip.style.display='block';
+    tip.style.left=(e.clientX+14)+'px';
+    tip.style.top=(e.clientY-10)+'px';
+    tip.innerHTML=`<div class="tn">${c.well||'?'} · ${c.type}</div>
+      <div>Circularity: ${c.circularity.toFixed(2)}</div>
+      <div>Isolation: ${c.nn_mm.toFixed(2)} mm</div>
+      <div>Radius: ${c.r.toFixed(1)} px</div>
+      <div>Quality: ${c.quality.toFixed(3)}</div>`;
+  }else{
+    const hb=nearB(ix,iy,30/zoomSc);
+    if(hb!==-1&&mode==='add'){
+      const b=allBlobs[hb];
+      tip.style.display='block';
+      tip.style.left=(e.clientX+14)+'px';
+      tip.style.top=(e.clientY-10)+'px';
+      tip.innerHTML=`<div class="tn">Detected Colony</div>
+        <div>Quality: ${b.quality.toFixed(3)}</div>
+        <div>Isolation: ${b.nn_mm.toFixed(2)} mm</div>
+        <div>Click to add</div>`;
+    }else tip.style.display='none';
+  }
+});
+
+cv.addEventListener('mouseleave',()=>{document.getElementById('tip').style.display='none';});
+
+function c2i(e){
+  const r=cv.getBoundingClientRect();
+  return[(e.clientX-r.left)*(cv.width/r.width)/zoomSc,
+         (e.clientY-r.top)*(cv.height/r.height)/zoomSc];
+}
+function nearS(ix,iy,md){
+  let best=-1,bd=md;
+  selected.forEach((c,i)=>{const d=Math.hypot(c.x-ix,c.y-iy);if(d<bd){bd=d;best=i;}});
+  return best;
+}
+function nearB(ix,iy,md){
+  const sk=new Set(selected.map(s=>`${Math.round(s.x)}_${Math.round(s.y)}`));
+  let best=-1,bd=md;
+  allBlobs.forEach((b,i)=>{
+    if(sk.has(`${Math.round(b.x)}_${Math.round(b.y)}`))return;
+    const d=Math.hypot(b.x-ix,b.y-iy);if(d<bd){bd=d;best=i;}
+  });
+  return best;
+}
+
+// ══════════════════════════════════════
+// MODE
+// ══════════════════════════════════════
+function toggleOverlay(){
+  showColonyOverlay=!showColonyOverlay;
+  const btn=document.getElementById('mOv');
+  btn.classList.toggle('on',showColonyOverlay);
+  redraw();
+}
+function setMode(m){
+  mode=m;
+  ['view','add','rm'].forEach(id=>{
+    document.getElementById('m'+id[0].toUpperCase()+id.slice(1)).classList.toggle('on',id===m);
+  });
+  cv.style.cursor=m==='add'?'crosshair':m==='rm'?'cell':'grab';
+}
+
+// ══════════════════════════════════════
+// ZOOM
+// ══════════════════════════════════════
+function zBy(f){
+  zoomSc=Math.max(dispSc*0.4,Math.min(zoomSc*f,dispSc*10));
+  cv.width=Math.round(imgW*zoomSc);cv.height=Math.round(imgH*zoomSc);
+  redraw();
+}
+function zoomAt(f,cx,cy){   // cx,cy: client coords of the pointer (or null = viewer centre)
+  const v=document.getElementById('cvwrap'), r=cv.getBoundingClientRect();
+  if(cx==null){const vr=v.getBoundingClientRect();cx=vr.left+vr.width/2;cy=vr.top+vr.height/2;}
+  const nz=Math.max(dispSc*0.4,Math.min(zoomSc*f,dispSc*12)), k=nz/zoomSc; if(k===1)return;
+  const ox=cx-r.left, oy=cy-r.top;                     // pointer offset inside the canvas (css px)
+  zoomSc=nz; cv.width=Math.round(imgW*zoomSc); cv.height=Math.round(imgH*zoomSc);
+  redraw();
+  const r2=cv.getBoundingClientRect();                 // keep the image point under the pointer fixed
+  v.scrollLeft+=(r2.left+ox*k)-cx; v.scrollTop+=(r2.top+oy*k)-cy;
+}
+function zReset(){fitCanvas();const v=document.getElementById('cvwrap');v.scrollLeft=0;v.scrollTop=0;}
+document.getElementById('cvwrap').addEventListener('wheel',e=>{
+  if(!imgEl)return; e.preventDefault();
+  zoomAt(Math.exp(-e.deltaY*(e.deltaMode===1?0.05:0.0015)),e.clientX,e.clientY);
+},{passive:false});
+// click-and-drag panning (VIEW mode only; ADD / REMOVE keep clicks for picking)
+let _pan=null, _panMoved=false;
+cv.addEventListener('mousedown',e=>{
+  if(!imgEl||mode!=='view'||e.button!==0)return;
+  const v=document.getElementById('cvwrap'); _pan={x:e.clientX,y:e.clientY,l:v.scrollLeft,t:v.scrollTop}; _panMoved=false;
+});
+window.addEventListener('mousemove',e=>{
+  if(!_pan)return; const v=document.getElementById('cvwrap'), dx=e.clientX-_pan.x, dy=e.clientY-_pan.y;
+  if(!_panMoved&&Math.hypot(dx,dy)<4)return; _panMoved=true; cv.style.cursor='grabbing';
+  v.scrollLeft=_pan.l-dx; v.scrollTop=_pan.t-dy;
+});
+window.addEventListener('mouseup',()=>{ if(_pan){_pan=null; cv.style.cursor=mode==='view'?'grab':cv.style.cursor;} });
+cv.addEventListener('click',e=>{ if(_panMoved){e.stopImmediatePropagation();_panMoved=false;} },true);
+
+// ══════════════════════════════════════
+// UI UPDATE
+// ══════════════════════════════════════
+function updateUI(){
+  const tgt=parseInt(document.getElementById('tgtC').value)||88;
+  const aN=selected.filter(s=>s.type==='auto').length;
+  const mN=selected.filter(s=>s.type==='manual').length;
+  const pct=Math.min(selected.length/tgt,1)*100;
+
+  document.getElementById('stS').textContent=selected.length;
+  document.getElementById('stT').textContent=tgt;
+  document.getElementById('stA').textContent=aN;
+  document.getElementById('stM').textContent=mN;
+  document.getElementById('pf').style.width=pct+'%';
+  document.getElementById('listBg').textContent=selected.length;
+
+  const n=document.getElementById('sNote');
+  if(selected.length>=tgt){
+    n.className='note nok';n.textContent=`✓ ${selected.length}/${tgt} colonies selected.`;
+    setPill(4);document.getElementById('expC').disabled=false;document.getElementById('expT').disabled=false;document.getElementById('expI').disabled=false;document.getElementById('expAll').disabled=false;
+  }else if(allBlobs.length){
+    n.className='note nw';
+    n.textContent=`${selected.length}/${tgt} — lower filter thresholds or use ADD mode to pick manually.`;
+    document.getElementById('expC').disabled=false;document.getElementById('expT').disabled=false;document.getElementById('expI').disabled=false;document.getElementById('expAll').disabled=false;
+  }else{
+    n.className='note ni';n.textContent='Run detection to find colonies.';
+  }
+  renderList();
+}
+
+function renderList(){
+  const el=document.getElementById('cList');
+  if(!selected.length){
+    el.innerHTML='<div style="text-align:center;padding:14px 0;font-family:var(--mono);font-size:9px;color:var(--txd)">No colonies selected.</div>';
+    return;
+  }
+  el.innerHTML=selected.map((c,i)=>`
+    <div class="ci ${c.type==='manual'?'m':'a'}" onclick="hlC(${i})">
+      <div class="cd" style="background:${c.type==='manual'?'#ff7043':'#448aff'}"></div>
+      <div class="cw">${c.well||'?'}</div>
+      <div class="csc">${c.quality.toFixed(2)}</div>
+      <div class="ct ${c.type==='manual'?'m':'a'}" ${c.lowConf?'style="background:rgba(255,202,40,.15);color:var(--warn)"':''}>${c.type==='manual'?'MAN':c.lowConf?'LOW':'AUTO'}</div>
+      <button class="crm" onclick="event.stopPropagation();rmC(${i})">×</button>
+    </div>`).join('');
+}
+
+function hlC(i){
+  const c=selected[i];
+  redraw();
+  const sx=c.x*zoomSc,sy=c.y*zoomSc;
+  ctx.beginPath();ctx.arc(sx,sy,(c.r||10)*zoomSc+8,0,Math.PI*2);
+  ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
+  scrollToItem(i);
+}
+function scrollToItem(i){
+  const items=document.querySelectorAll('.ci');
+  if(items[i])items[i].scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+function rmC(i){selected.splice(i,1);reassignWells();updateUI();redraw();}
+
+function setPill(n){
+  for(let i=1;i<=4;i++)document.getElementById('p'+i).className='pill'+(i<n?' done':i===n?' on':'');
+}
+
+// ══════════════════════════════════════
+// EXPORT — PIXL rearray format
+// Format: SourceName, Y_mm, X_mm, TargetName, RowLetter, ColNum
+// ══════════════════════════════════════
+function pxToMm(px,py){
+  return{x_mm:(px-plateCX)/pxPerMm, y_mm:(py-plateCY)/pxPerMm};
+}
+function exportCSV(){
+  const src=document.getElementById('srcN').value||'SourcePlate1';
+  const tgt=document.getElementById('tgtN').value||'TargetPlate1';
+  const[tt,tw]=document.getElementById('tgtF').value.split('_');
+  let csv=`${src},SBS,None,Source,,\n${tgt},${tt},${tw},Target,,\n`;
+  for(const c of selected){
+    if(!c.well)continue;
+    const m=c.well.match(/^([A-Z])(\d+)$/);if(!m)continue;
+    const{x_mm,y_mm}=pxToMm(c.x,c.y);
+    csv+=`${src},${y_mm.toFixed(8)},${x_mm.toFixed(8)},${tgt},${m[1]},${m[2]}\n`;
+  }
+  dl(csv,`${tgt}_RearrayFile.csv`,'text/csv');
+}
+function exportTSV(){
+  const src=document.getElementById('srcN').value||'SourcePlate1';
+  let tsv=`${src}\tSBS\tNONE\tSource\n`;
+  for(const c of selected){
+    const{x_mm,y_mm}=pxToMm(c.x,c.y);
+    tsv+=`${src}\t${y_mm.toFixed(3)}\t${x_mm.toFixed(3)}\n`;
+  }
+  dl(tsv,`${src}_RearrayTemplate.tsv`,'text/tab-separated-values');
+}
+function dl(content,name,mime){
+  if(window.__collect){window.__collect.push({name:name,data:content});return;}
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type:mime}));
+  a.download=name;a.click();
+}
+
+
+// ══════════════════════════════════════
+// EXPORT — ANNOTATED IMAGE
+// ══════════════════════════════════════
+function exportImage(){
+  const off=document.createElement('canvas');
+  off.width=imgW; off.height=imgH;
+  const oc=off.getContext('2d');
+  oc.drawImage(imgEl,0,0);
+
+  // Draw plate boundary
+  const{r1,r2,c1,c2}=plateBounds;
+  oc.strokeStyle='rgba(0,229,192,0.7)';oc.lineWidth=3;oc.setLineDash([8,4]);
+  oc.strokeRect(c1,r1,c2-c1,r2-r1);oc.setLineDash([]);
+
+  drawSectors(oc,1,2);
+  // Draw detected (unselected) blobs faintly
+  const selKeys=new Set(selected.map(s=>`${Math.round(s.x)}_${Math.round(s.y)}`));
+  for(const b of allBlobs){
+    if(selKeys.has(`${Math.round(b.x)}_${Math.round(b.y)}`))continue;
+    const q=Math.min(b.quality/0.8,1);
+    if(q<0.05)continue;
+    oc.beginPath();oc.arc(b.x,b.y,Math.max(b.r,4),0,Math.PI*2);
+    oc.strokeStyle=`rgba(0,229,192,${0.15+q*0.25})`;oc.lineWidth=1.5;oc.stroke();
+  }
+
+  // Draw selected colonies
+  for(const c of selected){
+    const col=c.type==='manual'?'#ff7043':'#448aff';
+    const r=Math.max(c.r,8);
+    // Glow
+    oc.beginPath();oc.arc(c.x,c.y,r+4,0,Math.PI*2);
+    oc.strokeStyle=col+'50';oc.lineWidth=6;oc.stroke();
+    // Ring
+    oc.beginPath();oc.arc(c.x,c.y,r,0,Math.PI*2);
+    oc.strokeStyle=col;oc.lineWidth=2.5;oc.stroke();
+    // Center dot
+    oc.beginPath();oc.arc(c.x,c.y,3,0,Math.PI*2);
+    oc.fillStyle=col;oc.fill();
+    // Well label
+    if(c.well){
+      const fs=Math.max(11,Math.min(Math.round(r*0.9),20));
+      oc.font=`bold ${fs}px JetBrains Mono,monospace`;
+      oc.textAlign='center';
+      oc.shadowColor='#000';oc.shadowBlur=5;
+      oc.fillStyle='#fff';
+      oc.fillText(c.well,c.x,c.y-r-5);
+      oc.shadowBlur=0;
+    }
+  }
+
+  const src=document.getElementById('srcN').value||'SourcePlate1';
+  off.toBlob(blob=>{
+    if(window.__collect){window.__collect.push({name:`${src}_annotated.png`,data:blob});if(window.__imgRes)window.__imgRes();return;}
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`${src}_annotated.png`;a.click();
+  },'image/png');
+}
+
+// ══════════════════════════════════════
+// EXPORT — SETTINGS JSON
+// ══════════════════════════════════════
+function exportSettings(){
+  const src=document.getElementById('srcN').value||'SourcePlate1';
+  const settings={
+    timestamp: new Date().toISOString(),
+    sourcePlate: src,
+    targetPlate: document.getElementById('tgtN').value||'TargetPlate1',
+    targetFormat: document.getElementById('tgtF').value,
+    colonyCount: parseInt(document.getElementById('tgtC').value)||88,
+    excludedWells: [...excl],
+    detection:{ algorithm:'ColonyDetect v1', strategy:document.getElementById('strat').value, sizeNeutral:document.getElementById('sizeN').checked },
+    filters:{
+      minIsolationMm: parseFloat(document.getElementById('slIso').value),
+      minCircularity: parseFloat(document.getElementById('slCir').value),
+      minRadiusPx: parseInt(document.getElementById('slSzMin').value),
+      maxRadiusPx: parseInt(document.getElementById('slSzMax').value),
+    },
+    results:{
+      totalDetected: allBlobs.length,
+      totalSelected: selected.length,
+      autoSelected: selected.filter(s=>s.type==='auto').length,
+      manualSelected: selected.filter(s=>s.type==='manual').length,
+    },
+    calibration:{
+      plateBounds,
+      plateCenterPx: {x:plateCX, y:plateCY},
+      pxPerMm, plateKind, agarDepthMm: parseFloat(document.getElementById('agarD').value)||null,
+    },
+    colonies: selected.map(c=>({
+      well: c.well,
+      type: c.type,
+      x_px: Math.round(c.x),
+      y_px: Math.round(c.y),
+      x_mm: parseFloat(((c.x-plateCX)/pxPerMm).toFixed(4)),
+      y_mm: parseFloat(((c.y-plateCY)/pxPerMm).toFixed(4)),
+      radius_px: parseFloat(c.r.toFixed(1)),
+      circularity: parseFloat(c.circularity.toFixed(3)),
+      isolation_mm: parseFloat(c.nn_mm.toFixed(3)),
+      quality: parseFloat(c.quality.toFixed(4)),
+    })),
+  };
+  dl(JSON.stringify(settings,null,2),`${src}_settings.json`,'application/json');
+}
+
+// ══════════════════════════════════════
+// EXPORT ALL — one folder with everything
+// ══════════════════════════════════════
+const _crcT=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function _crc(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=_crcT[(c^u[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+async function _bytes(d){if(d instanceof Blob)return new Uint8Array(await d.arrayBuffer());return new TextEncoder().encode(d);}
+async function _zip(files,folder){   // store-only zip, files inside <folder>/
+  const parts=[],cen=[];let off=0;const enc=new TextEncoder();
+  const u16=v=>[v&255,(v>>8)&255],u32=v=>[v&255,(v>>8)&255,(v>>16)&255,(v>>>24)&255];
+  for(const f of files){
+    const nm=enc.encode(folder+'/'+f.name),b=await _bytes(f.data),crc=_crc(b);
+    const lh=new Uint8Array([0x50,0x4b,3,4,20,0,0,8,0,0,0,0,0x21,0,...u32(crc),...u32(b.length),...u32(b.length),...u16(nm.length),0,0]);
+    parts.push(lh,nm,b);
+    cen.push(new Uint8Array([0x50,0x4b,1,2,20,0,20,0,0,8,0,0,0,0,0x21,0,...u32(crc),...u32(b.length),...u32(b.length),...u16(nm.length),0,0,0,0,0,0,0,0,0,0,0,0,...u32(off)]),nm);
+    off+=lh.length+nm.length+b.length;
+  }
+  let cl=0;for(const c of cen)cl+=c.length;
+  const end=new Uint8Array([0x50,0x4b,5,6,0,0,0,0,...u16(files.length),...u16(files.length),...u32(cl),...u32(off),0,0]);
+  return new Blob([...parts,...cen,end],{type:'application/zip'});
+}
+function _pickRows(){
+  const hasSec=!!compiledSect;
+  let csv='pick,well,sector,type,x_mm,y_mm,x_px,y_px,radius_mm,score,p_real,tier\n';
+  selected.forEach((c,i)=>{
+    const sc=hasSec?secAt(c):-1, xm=(c.x-plateCX)/pxPerMm, ym=(c.y-plateCY)/pxPerMm;
+    const ty=c.type==='manual'?'manual':c.lowConf?'LOW':'auto', f=(v,d)=>v==null||!isFinite(v)?'':(+v).toFixed(d);
+    csv+=`${i+1},${c.well||''},${sc>=0?'S'+(sc+1):''},${ty},${xm.toFixed(4)},${ym.toFixed(4)},${Math.round(c.x)},${Math.round(c.y)},${f(c.r_mm!=null?c.r_mm:c.r/pxPerMm,3)},${f(c.score,3)},${f(c.preal,3)},${c.tier!=null?c.tier:''}\n`;
+  });
+  return csv;
+}
+function _report(src){
+  const L=[`Colony Picker v15 report — ${src}`,`Exported: ${new Date().toLocaleString()}`,`Plate type: ${document.getElementById('plType').value}   scale: ${pxPerMm.toFixed(3)} px/mm`,`Colonies selected: ${selected.length} (${selected.filter(s=>s.type==='manual').length} manual, ${selected.filter(s=>s.lowConf).length} low-confidence)`,''];
+  if(compiledSect){
+    const k=parseInt(document.getElementById('perSecK').value)||1, secs=enabledSectors(), cnt=new Array(compiledSect.n).fill(0), low=new Array(compiledSect.n).fill(0);
+    for(const c of selected){const s=secAt(c);if(s>=0){cnt[s]++;if(c.lowConf)low[s]++;}}
+    L.push(`Per-sector picks (target ${k} per sector):`);
+    const empty=[],short=[];
+    for(const s of secs){L.push(`  S${s+1}: ${cnt[s]}/${k}${low[s]?`  (${low[s]} low-confidence)`:''}${cnt[s]===0?'   <-- NO COLONY, pick manually':cnt[s]<k?'   <-- short':''}`);if(cnt[s]===0)empty.push('S'+(s+1));else if(cnt[s]<k)short.push('S'+(s+1));}
+    L.push('');if(empty.length)L.push('Sectors needing a manual pick: '+empty.join(', '));if(short.length)L.push('Sectors short of target: '+short.join(', '));
+    if(!empty.length&&!short.length)L.push('All sectors at target.');
+  }else{
+    const want=parseInt(document.getElementById('tgtC').value)||0;L.push(`Requested ${want}, selected ${selected.length}.`);if(selected.length<want)L.push(`Short by ${want-selected.length}: pick the rest manually.`);
+  }
+  return L.join('\n')+'\n';
+}
+async function exportAll(){
+  if(!selected.length){alert('Nothing selected yet.');return;}
+  const src=document.getElementById('srcN').value||'SourcePlate1', tgt=document.getElementById('tgtN').value||'TargetPlate1';
+  const d=new Date(), p=n=>String(n).padStart(2,'0'), folder=`${src}_export_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+  window.__collect=[];let files;
+  try{exportCSV();exportTSV();exportSettings();await new Promise(r=>{window.__imgRes=r;exportImage();});}
+  finally{files=window.__collect;window.__collect=null;window.__imgRes=null;}
+  files.push({name:`${src}_colonies.csv`,data:_pickRows()},{name:`${src}_report.txt`,data:_report(src)});
+  try{files.push({name:`${src}_original.png`,data:await (await fetch(imgEl.src)).blob()});}catch(e){}
+  if(window.showDirectoryPicker){
+    try{
+      const root=await window.showDirectoryPicker({mode:'readwrite'}), dir=await root.getDirectoryHandle(folder,{create:true});
+      for(const f of files){const w=await (await dir.getFileHandle(f.name,{create:true})).createWritable();await w.write(f.data);await w.close();}
+      alert(`Exported ${files.length} files to folder "${folder}".`);return;
+    }catch(e){if(e&&e.name==='AbortError')return;console.warn('folder write failed, falling back to zip',e);}
+  }
+  const z=await _zip(files,folder),a=document.createElement('a');a.href=URL.createObjectURL(z);a.download=folder+'.zip';a.click();
+}
+
+// ══════════════════════════════════════
+// LOADING
+// ══════════════════════════════════════
+function showOv(msg,sub=''){
+  document.getElementById('ov').style.display='flex';
+  document.getElementById('lm').textContent=msg;
+  document.getElementById('ls').textContent=sub;
+}
+function hideOv(){document.getElementById('ov').style.display='none';}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+</script>
+</body>
+</html>
